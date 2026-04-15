@@ -5,6 +5,8 @@ import path from 'path';
 import { execSync } from 'child_process';
 import fs from 'fs';
 
+const MANAGEMENT_HTML_NAME = 'management.html';
+
 // Get version from environment, git tag, or package.json
 function getVersion(): string {
   // 1. Environment variable (set by GitHub Actions)
@@ -41,7 +43,21 @@ export default defineConfig({
     react(),
     viteSingleFile({
       removeViteModuleLoader: true
-    })
+    }),
+    {
+      name: 'emit-management-html',
+      closeBundle() {
+        const distDir = path.resolve(__dirname, 'dist');
+        const sourcePath = path.join(distDir, 'index.html');
+        const targetPath = path.join(distDir, MANAGEMENT_HTML_NAME);
+
+        if (!fs.existsSync(sourcePath)) {
+          return;
+        }
+
+        fs.copyFileSync(sourcePath, targetPath);
+      }
+    }
   ],
   define: {
     __APP_VERSION__: JSON.stringify(getVersion())
