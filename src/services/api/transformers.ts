@@ -10,7 +10,7 @@ import type {
   AmpcodeUpstreamApiKeyMapping
 } from '@/types';
 import type { Config } from '@/types/config';
-import { buildHeaderObject } from '@/utils/headers';
+import { buildReadableHeaderObject } from '@/utils/headers';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -63,7 +63,7 @@ const normalizeModelAliases = (models: unknown): ModelAlias[] => {
 
 const normalizeHeaders = (headers: unknown) => {
   if (!headers || typeof headers !== 'object') return undefined;
-  const normalized = buildHeaderObject(
+  const normalized = buildReadableHeaderObject(
     Array.isArray(headers)
       ? (headers as Array<{ key: string; value: string }>)
       : (headers as Record<string, string | undefined | null>)
@@ -360,6 +360,12 @@ export const normalizeConfigResponse = (raw: unknown): Config => {
     if (Number.isFinite(parsed)) {
       config.requestRetry = parsed;
     }
+  }
+  const forwardRequestHeaders = normalizeHeaders(
+    raw['forward-request-headers'] ?? raw.forwardRequestHeaders
+  );
+  if (forwardRequestHeaders) {
+    config.forwardRequestHeaders = forwardRequestHeaders;
   }
 
   const quota = raw['quota-exceeded'] ?? raw.quotaExceeded;

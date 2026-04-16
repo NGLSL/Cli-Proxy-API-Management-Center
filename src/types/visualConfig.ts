@@ -1,3 +1,5 @@
+import type { HeaderEntry } from '@/utils/headers';
+
 export type PayloadParamValueType = 'string' | 'number' | 'boolean' | 'json';
 export type PayloadParamValidationErrorCode =
   | 'payload_invalid_number'
@@ -8,13 +10,17 @@ export type VisualConfigFieldPath =
   | 'port'
   | 'logsMaxTotalSizeMb'
   | 'requestRetry'
+  | 'forwardRequestHeaders'
   | 'maxRetryCredentials'
   | 'maxRetryInterval'
   | 'streaming.keepaliveSeconds'
   | 'streaming.bootstrapRetries'
   | 'streaming.nonstreamKeepaliveInterval';
 
-export type VisualConfigValidationErrorCode = 'port_range' | 'non_negative_integer';
+export type VisualConfigValidationErrorCode =
+  | 'port_range'
+  | 'non_negative_integer'
+  | 'duplicate_header_key';
 
 export type VisualConfigValidationErrors = Partial<
   Record<VisualConfigFieldPath, VisualConfigValidationErrorCode>
@@ -71,6 +77,7 @@ export type VisualConfigValues = {
   proxyUrl: string;
   forceModelPrefix: boolean;
   requestRetry: string;
+  forwardRequestHeaders: HeaderEntry[];
   maxRetryCredentials: string;
   maxRetryInterval: string;
   quotaSwitchProject: boolean;
@@ -111,6 +118,7 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
   proxyUrl: '',
   forceModelPrefix: false,
   requestRetry: '',
+  forwardRequestHeaders: [],
   maxRetryCredentials: '',
   maxRetryInterval: '',
   quotaSwitchProject: true,

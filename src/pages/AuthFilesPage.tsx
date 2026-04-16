@@ -117,6 +117,8 @@ export function AuthFilesPage() {
     deletingAll,
     statusUpdating,
     batchStatusUpdating,
+    batchWebsocketUpdating,
+    allActionUpdating,
     fileInputRef,
     loadFiles,
     handleUploadClick,
@@ -131,8 +133,13 @@ export function AuthFilesPage() {
     deselectAll,
     batchDownload,
     batchSetStatus,
+    batchSetWebsockets,
+    setAllStatus,
+    setAllWebsockets,
     batchDelete,
   } = useAuthFilesData({ refreshKeyStats });
+
+  const noSelectionUsesAllFiles = selectionCount === 0;
 
   const statusBarCache = useAuthFilesStatusBarCache(files, usageDetails);
 
@@ -436,11 +443,20 @@ export function AuthFilesPage() {
     () => selectedNames.some((name) => statusUpdating[name] === true),
     [selectedNames, statusUpdating]
   );
-  const batchStatusButtonsDisabled =
+  const allScopeButtonsDisabled = disableControls || loading || allActionUpdating;
+  const selectedActionButtonsDisabled =
     disableControls ||
     selectedNames.length === 0 ||
     batchStatusUpdating ||
+    batchWebsocketUpdating ||
+    allActionUpdating ||
     selectedHasStatusUpdating;
+  const selectedDownloadDeleteDisabled =
+    disableControls ||
+    selectedNames.length === 0 ||
+    batchStatusUpdating ||
+    batchWebsocketUpdating ||
+    allActionUpdating;
 
   const copyTextWithNotification = useCallback(
     async (text: string) => {
@@ -648,6 +664,55 @@ export function AuthFilesPage() {
         <h1 className={styles.pageTitle}>{t('auth_files.title')}</h1>
         <p className={styles.description}>{t('auth_files.description')}</p>
       </div>
+
+      <Card>
+        <div className={styles.bulkScopeActions}>
+          <div className={styles.bulkScopeActionsContent}>
+            <h3 className={styles.bulkScopeActionsTitle}>{t('auth_files.all_actions_title')}</h3>
+            <p className={styles.bulkScopeActionsDescription}>
+              {noSelectionUsesAllFiles
+                ? t('auth_files.all_actions_description')
+                : t('auth_files.selected_actions_hint', { count: selectionCount })}
+            </p>
+          </div>
+          <div className={styles.bulkScopeActionsButtons}>
+            <Button
+              size="sm"
+              onClick={() => void setAllStatus(true)}
+              disabled={allScopeButtonsDisabled}
+              loading={allActionUpdating}
+            >
+              {t('auth_files.all_enable_button')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void setAllStatus(false)}
+              disabled={allScopeButtonsDisabled}
+              loading={allActionUpdating}
+            >
+              {t('auth_files.all_disable_button')}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void setAllWebsockets(true)}
+              disabled={allScopeButtonsDisabled}
+              loading={allActionUpdating}
+            >
+              {t('auth_files.all_websocket_enable_button')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void setAllWebsockets(false)}
+              disabled={allScopeButtonsDisabled}
+              loading={allActionUpdating}
+            >
+              {t('auth_files.all_websocket_disable_button')}
+            </Button>
+          </div>
+        </div>
+      </Card>
 
       <Card
         title={titleNode}
@@ -930,30 +995,49 @@ export function AuthFilesPage() {
                     variant="secondary"
                     size="sm"
                     onClick={() => void batchDownload(selectedNames)}
-                    disabled={disableControls || selectedNames.length === 0}
+                    disabled={selectedDownloadDeleteDisabled}
                   >
                     {t('auth_files.batch_download')}
                   </Button>
                   <Button
                     size="sm"
-                    onClick={() => batchSetStatus(selectedNames, true)}
-                    disabled={batchStatusButtonsDisabled}
+                    onClick={() => void batchSetStatus(selectedNames, true)}
+                    disabled={selectedActionButtonsDisabled}
+                    loading={batchStatusUpdating}
                   >
-                    {t('auth_files.batch_enable')}
+                    {t('auth_files.batch_enable_selected')}
                   </Button>
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => batchSetStatus(selectedNames, false)}
-                    disabled={batchStatusButtonsDisabled}
+                    onClick={() => void batchSetStatus(selectedNames, false)}
+                    disabled={selectedActionButtonsDisabled}
+                    loading={batchStatusUpdating}
                   >
-                    {t('auth_files.batch_disable')}
+                    {t('auth_files.batch_disable_selected')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => void batchSetWebsockets(selectedNames, true)}
+                    disabled={selectedActionButtonsDisabled}
+                    loading={batchWebsocketUpdating}
+                  >
+                    {t('auth_files.batch_websocket_enable_selected')}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void batchSetWebsockets(selectedNames, false)}
+                    disabled={selectedActionButtonsDisabled}
+                    loading={batchWebsocketUpdating}
+                  >
+                    {t('auth_files.batch_websocket_disable_selected')}
                   </Button>
                   <Button
                     variant="danger"
                     size="sm"
                     onClick={() => batchDelete(selectedNames)}
-                    disabled={disableControls || selectedNames.length === 0}
+                    disabled={selectedDownloadDeleteDisabled}
                   >
                     {t('common.delete')}
                   </Button>

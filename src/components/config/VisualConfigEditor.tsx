@@ -12,6 +12,7 @@ import {
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { usePageTransitionLayer } from '@/components/common/PageTransitionLayer';
+import { HeaderInputList } from '@/components/ui/HeaderInputList';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
@@ -188,6 +189,8 @@ export function VisualConfigEditor({
   const keepaliveInputId = useId();
   const keepaliveHintId = `${keepaliveInputId}-hint`;
   const keepaliveErrorId = `${keepaliveInputId}-error`;
+  const forwardRequestHeadersInputId = useId();
+  const forwardRequestHeadersErrorId = `${forwardRequestHeadersInputId}-error`;
   const nonstreamKeepaliveInputId = useId();
   const nonstreamKeepaliveHintId = `${nonstreamKeepaliveInputId}-hint`;
   const nonstreamKeepaliveErrorId = `${nonstreamKeepaliveInputId}-error`;
@@ -210,6 +213,10 @@ export function VisualConfigEditor({
   const portError = getValidationMessage(t, validationErrors?.port);
   const logsMaxSizeError = getValidationMessage(t, validationErrors?.logsMaxTotalSizeMb);
   const requestRetryError = getValidationMessage(t, validationErrors?.requestRetry);
+  const forwardRequestHeadersError = getValidationMessage(
+    t,
+    validationErrors?.forwardRequestHeaders
+  );
   const maxRetryCredentialsError = getValidationMessage(t, validationErrors?.maxRetryCredentials);
   const maxRetryIntervalError = getValidationMessage(t, validationErrors?.maxRetryInterval);
   const keepaliveError = getValidationMessage(t, validationErrors?.['streaming.keepaliveSeconds']);
@@ -295,7 +302,12 @@ export function VisualConfigEditor({
         title: t('config_management.visual.sections.network.title'),
         description: t('config_management.visual.sections.network.description'),
         icon: IconTrendingUp,
-        errorCount: countErrors(['requestRetry', 'maxRetryCredentials', 'maxRetryInterval']),
+        errorCount: countErrors([
+          'requestRetry',
+          'forwardRequestHeaders',
+          'maxRetryCredentials',
+          'maxRetryInterval',
+        ]),
       },
       {
         id: 'quota',
@@ -908,6 +920,33 @@ export function VisualConfigEditor({
                   onChange={(wsAuth) => onChange({ wsAuth })}
                 />
               </SectionGrid>
+
+              <SectionSubsection
+                title={t(
+                  'config_management.visual.sections.network.forward_request_headers_title'
+                )}
+                description={t(
+                  'config_management.visual.sections.network.forward_request_headers_description'
+                )}
+              >
+                <HeaderInputList
+                  entries={values.forwardRequestHeaders}
+                  onChange={(forwardRequestHeaders) => onChange({ forwardRequestHeaders })}
+                  addLabel={t('common.custom_headers_add')}
+                  keyPlaceholder={t('common.custom_headers_key_placeholder')}
+                  valuePlaceholder={t('common.custom_headers_value_placeholder')}
+                  removeButtonTitle={t('common.delete')}
+                  removeButtonAriaLabel={t('common.delete')}
+                  disabled={disabled}
+                />
+                {forwardRequestHeadersError ? (
+                  <div className={styles.fieldShell}>
+                    <div id={forwardRequestHeadersErrorId} className="error-box">
+                      {forwardRequestHeadersError}
+                    </div>
+                  </div>
+                ) : null}
+              </SectionSubsection>
             </SectionStack>
           </ConfigSection>
 

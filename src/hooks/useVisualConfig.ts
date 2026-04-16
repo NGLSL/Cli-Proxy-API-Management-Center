@@ -10,6 +10,13 @@ import type {
   PayloadParamValidationErrorCode,
 } from '@/types/visualConfig';
 import { DEFAULT_VISUAL_VALUES } from '@/types/visualConfig';
+import {
+  buildHeaderObject,
+  buildReadableHeaderObject,
+  headersToEntries,
+  normalizeHeaderEntries,
+  type HeaderEntry,
+} from '@/utils/headers';
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -125,6 +132,18 @@ function setIntFromStringInDoc(doc: YamlDocument, path: YamlPath, value: unknown
   }
 }
 
+function setForwardRequestHeadersInDoc(doc: YamlDocument, entries: HeaderEntry[]): void {
+  const headerObject = buildHeaderObject(normalizeHeaderEntries(entries));
+  if (Object.keys(headerObject).length > 0) {
+    doc.setIn(['forward-request-headers'], headerObject);
+    return;
+  }
+
+  if (docHas(doc, ['forward-request-headers'])) {
+    doc.deleteIn(['forward-request-headers']);
+  }
+}
+
 function getNonNegativeIntegerError(value: string): 'non_negative_integer' | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
@@ -140,6 +159,21 @@ function getPortError(value: string): 'port_range' | undefined {
   return parsed >= 1 && parsed <= 65535 ? undefined : 'port_range';
 }
 
+function getDuplicateHeaderKeyError(
+  entries: HeaderEntry[]
+): 'duplicate_header_key' | undefined {
+  const seenKeys = new Set<string>();
+
+  for (const entry of entries) {
+    const normalizedKey = String(entry?.key ?? '').trim().toLowerCase();
+    if (!normalizedKey) continue;
+    if (seenKeys.has(normalizedKey)) return 'duplicate_header_key';
+    seenKeys.add(normalizedKey);
+  }
+
+  return undefined;
+}
+
 export function getVisualConfigValidationErrors(
   values: VisualConfigValues
 ): VisualConfigValidationErrors {
@@ -147,6 +181,7 @@ export function getVisualConfigValidationErrors(
     port: getPortError(values.port),
     logsMaxTotalSizeMb: getNonNegativeIntegerError(values.logsMaxTotalSizeMb),
     requestRetry: getNonNegativeIntegerError(values.requestRetry),
+    forwardRequestHeaders: getDuplicateHeaderKeyError(values.forwardRequestHeaders),
     maxRetryCredentials: getNonNegativeIntegerError(values.maxRetryCredentials),
     maxRetryInterval: getNonNegativeIntegerError(values.maxRetryInterval),
     'streaming.keepaliveSeconds': getNonNegativeIntegerError(values.streaming.keepaliveSeconds),
@@ -263,6 +298,36 @@ function arePayloadFilterRulesEqual(
     }
   }
   return true;
+}
+
+function parseHeaderEntries(raw: unknown): HeaderEntry[] {
+  const source = Array.isArray(raw)
+    ? (raw as HeaderEntry[])
+    : ((asRecord(raw) as Record<string, string | undefined | null> | null) ?? undefined);
+  return normalizeHeaderEntries(headersToEntries(buildReadableHeaderObject(source)));
+}
+
+function areHeaderEntriesEqual(left: HeaderEntry[], right: HeaderEntry[]): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i += 1) {
+    const a = left[i];
+    const b = right[i];
+    if (!a || !b) return false;
+    if (a.key !== b.key || a.value !== b.value) return false;
+  }
+  return true;
+}
+
+function normalizeForwardRequestHeadersForPatch(
+  entries: HeaderEntry[] | null | undefined
+): HeaderEntry[] {
+  if (!Array.isArray(entries)) return [];
+
+  return entries.map((entry) => ({
+    key: String(entry?.key ?? ''),
+    value: String(entry?.value ?? ''),
+  }));
 }
 
 function parsePayloadParamValue(raw: unknown): { valueType: PayloadParamValueType; value: string } {
@@ -530,6 +595,11 @@ function mergeVisualConfigValues(
   patch: Partial<VisualConfigValues>
 ): VisualConfigValues {
   const nextValues: VisualConfigValues = { ...currentValues, ...patch } as VisualConfigValues;
+  if (Object.prototype.hasOwnProperty.call(patch, 'forwardRequestHeaders')) {
+    nextValues.forwardRequestHeaders = normalizeForwardRequestHeadersForPatch(
+      patch.forwardRequestHeaders
+    );
+  }
   if (patch.streaming) {
     nextValues.streaming = { ...currentValues.streaming, ...patch.streaming };
   }
@@ -619,6 +689,15 @@ function getNextDirtyFields(
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'requestRetry')) {
     updateDirty('requestRetry', nextValues.requestRetry === baselineValues.requestRetry);
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'forwardRequestHeaders')) {
+    updateDirty(
+      'forwardRequestHeaders',
+      areHeaderEntriesEqual(
+        normalizeHeaderEntries(nextValues.forwardRequestHeaders),
+        normalizeHeaderEntries(baselineValues.forwardRequestHeaders)
+      )
+    );
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'maxRetryCredentials')) {
     updateDirty(
@@ -827,6 +906,7 @@ export function useVisualConfig() {
         proxyUrl: typeof parsed['proxy-url'] === 'string' ? parsed['proxy-url'] : '',
         forceModelPrefix: Boolean(parsed['force-model-prefix']),
         requestRetry: String(parsed['request-retry'] ?? ''),
+        forwardRequestHeaders: parseHeaderEntries(parsed['forward-request-headers']),
         maxRetryCredentials: String(parsed['max-retry-credentials'] ?? ''),
         maxRetryInterval: String(parsed['max-retry-interval'] ?? ''),
         wsAuth: Boolean(parsed['ws-auth']),
@@ -931,6 +1011,7 @@ export function useVisualConfig() {
         setIntFromStringInDoc(doc, ['request-retry'], values.requestRetry);
         setIntFromStringInDoc(doc, ['max-retry-credentials'], values.maxRetryCredentials);
         setIntFromStringInDoc(doc, ['max-retry-interval'], values.maxRetryInterval);
+        setForwardRequestHeadersInDoc(doc, values.forwardRequestHeaders);
         setBooleanInDoc(doc, ['ws-auth'], values.wsAuth);
 
         if (

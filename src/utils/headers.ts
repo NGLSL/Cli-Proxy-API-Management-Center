@@ -40,8 +40,34 @@ export function hasHeader(headers: Record<string, unknown> | null | undefined, n
 export function headersToEntries(headers?: Record<string, string | undefined | null>): HeaderEntry[] {
   if (!headers || typeof headers !== 'object') return [];
   return Object.entries(headers)
-    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .filter(([, value]) => value !== undefined && value !== null)
     .map(([key, value]) => ({ key, value: String(value) }));
+}
+
+export function buildReadableHeaderObject(
+  input?: HeaderEntry[] | Record<string, string | undefined | null>
+): Record<string, string> {
+  if (!input) return {};
+
+  if (Array.isArray(input)) {
+    return input.reduce<Record<string, string>>((acc, item) => {
+      const key = item?.key?.trim();
+      const value = item?.value?.trim();
+      if (key && value !== undefined && value !== null) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+  }
+
+  return Object.entries(input).reduce<Record<string, string>>((acc, [rawKey, rawValue]) => {
+    const key = rawKey?.trim();
+    const value = typeof rawValue === 'string' ? rawValue.trim() : rawValue;
+    if (key && value !== undefined && value !== null) {
+      acc[key] = String(value);
+    }
+    return acc;
+  }, {});
 }
 
 export const normalizeHeaderEntries = (entries: HeaderEntry[]) =>

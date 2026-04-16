@@ -24,6 +24,7 @@ export interface AuthFileItem {
   size?: number;
   authIndex?: string | number | null;
   runtimeOnly?: boolean | string;
+  websockets?: boolean | string;
   disabled?: boolean;
   unavailable?: boolean;
   status?: string;
@@ -36,4 +37,41 @@ export interface AuthFileItem {
 export interface AuthFilesResponse {
   files: AuthFileItem[];
   total?: number;
+}
+
+export interface AuthFileBatchFailure {
+  name: string;
+  error: string;
+}
+
+export interface AuthFileBatchSkipped {
+  name: string;
+  reason: string;
+}
+
+export interface AuthFilePatchFieldsPayload {
+  name?: string;
+  names?: string[];
+  all?: boolean;
+  disabled?: boolean;
+  websockets?: boolean;
+  prefix?: string;
+  proxy_url?: string;
+  headers?: Record<string, string>;
+  priority?: number | null;
+  note?: string;
+}
+
+export interface AuthFilePatchFieldsResponse {
+  status?: string;
+  updated?: unknown;
+  skipped?: unknown;
+  failed?: unknown;
+}
+
+export interface AuthFilePatchFieldsResult {
+  status: string;
+  updated: string[];
+  skipped: AuthFileBatchSkipped[];
+  failed: AuthFileBatchFailure[];
 }

@@ -3,13 +3,19 @@
  */
 
 import { apiClient } from './client';
-import type { AuthFilesResponse } from '@/types/authFile';
+import type {
+  AuthFileBatchFailure,
+  AuthFileBatchSkipped,
+  AuthFilePatchFieldsPayload,
+  AuthFilePatchFieldsResponse,
+  AuthFilePatchFieldsResult,
+  AuthFilesResponse,
+} from '@/types/authFile';
 import type { OAuthModelAliasEntry } from '@/types';
 
 type StatusError = { status?: number };
 type AuthFileStatusResponse = { status: string; disabled: boolean };
 type AuthFileEntry = AuthFilesResponse['files'][number];
-type AuthFileBatchFailure = { name: string; error: string };
 type AuthFileBatchUploadResponse = {
   status?: string;
   uploaded?: number;
@@ -78,6 +84,20 @@ const normalizeBatchFailures = (value: unknown): AuthFileBatchFailure[] => {
 
     if (!name && !error) return result;
     result.push({ name, error: error || 'Unknown error' });
+    return result;
+  }, []);
+};
+
+const normalizeBatchSkipped = (value: unknown): AuthFileBatchSkipped[] => {
+  if (!Array.isArray(value)) return [];
+
+  return value.reduce<AuthFileBatchSkipped[]>((result, item) => {
+    if (!item || typeof item !== 'object') return result;
+    const entry = item as Record<string, unknown>;
+    const name = String(entry.name ?? '').trim();
+    const reason = String(entry.reason ?? '').trim();
+    if (!name && !reason) return result;
+    result.push({ name, reason: reason || 'unknown' });
     return result;
   }, []);
 };
@@ -163,6 +183,40 @@ const normalizeBatchDeleteResponse = (
     deleted,
     files: deletedFiles,
     failed,
+  };
+};
+
+const normalizePatchFieldsResponse = (
+  payload: AuthFilePatchFieldsResponse | undefined,
+  requestedNames: string[]
+): AuthFilePatchFieldsResult => {
+  const failed = normalizeBatchFailures(payload?.failed);
+  const skipped = normalizeBatchSkipped(payload?.skipped);
+  const updated = normalizeBatchFileNames(payload?.updated);
+
+  if (updated.length > 0 || skipped.length > 0 || failed.length > 0) {
+    return {
+      status:
+        typeof payload?.status === 'string'
+          ? payload.status
+          : failed.length > 0
+            ? updated.length > 0 || skipped.length > 0
+              ? 'partial'
+              : 'error'
+            : skipped.length > 0
+              ? 'partial'
+              : 'ok',
+      updated,
+      skipped,
+      failed,
+    };
+  }
+
+  return {
+    status: typeof payload?.status === 'string' ? payload.status : requestedNames.length > 0 ? 'ok' : 'error',
+    updated: requestedNames,
+    skipped: [],
+    failed: [],
   };
 };
 
@@ -399,6 +453,37 @@ export const authFilesApi = {
 
   setStatus: (name: string, disabled: boolean) =>
     apiClient.patch<AuthFileStatusResponse>('/auth-files/status', { name, disabled }),
+
+  patchFields: async (payload: AuthFilePatchFieldsPayload): Promise<AuthFilePatchFieldsResult> => {
+    const requestedNames = payload.all
+      ? []
+      : payload.names && payload.names.length > 0
+        ? normalizeRequestedAuthFileNames(payload.names)
+        : payload.name
+          ? normalizeRequestedAuthFileNames([payload.name])
+          : [];
+
+    const normalizedPayload = payload.all
+      ? { ...payload, all: true }
+      : requestedNames.length > 1
+        ? { ...payload, names: requestedNames }
+        : requestedNames.length === 1
+          ? { ...payload, name: requestedNames[0] }
+          : payload;
+
+    const result = await apiClient.patch<AuthFilePatchFieldsResponse>('/auth-files/fields', normalizedPayload);
+    return normalizePatchFieldsResponse(result, requestedNames);
+  },
+
+  setAllStatus: (disabled: boolean) => authFilesApi.patchFields({ all: true, disabled }),
+
+  setSelectedStatus: (names: string[], disabled: boolean) =>
+    authFilesApi.patchFields({ names: normalizeRequestedAuthFileNames(names), disabled }),
+
+  setSelectedWebsockets: (names: string[], enabled: boolean) =>
+    authFilesApi.patchFields({ names: normalizeRequestedAuthFileNames(names), websockets: enabled }),
+
+  setAllWebsockets: (enabled: boolean) => authFilesApi.patchFields({ all: true, websockets: enabled }),
 
   uploadFiles: async (files: File[]): Promise<AuthFileBatchUploadResult> => {
     const requestedNames = files.map((file) => file.name);

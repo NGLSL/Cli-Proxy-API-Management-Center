@@ -78,6 +78,44 @@
   margin-bottom: $spacing-md;
 }
 
+.bulkScopeActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-md;
+  flex-wrap: wrap;
+}
+
+.bulkScopeActionsContent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.bulkScopeActionsTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.bulkScopeActionsDescription {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.bulkScopeActionsButtons {
+  display: flex;
+  align-items: center;
+  gap: $spacing-xs;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 // 筛选区域
 .filterSection {
   display: flex;
@@ -1561,6 +1599,19 @@
 }
 
 @include mobile {
+  .bulkScopeActions {
+    align-items: stretch;
+  }
+
+  .bulkScopeActionsButtons {
+    justify-content: stretch;
+
+    :global(.btn) {
+      flex: 1 1 calc(50% - 4px);
+      min-width: 0;
+    }
+  }
+
   .batchActionContainer {
     width: calc(100vw - 16px);
     max-width: calc(100vw - 16px);

@@ -89,6 +89,48 @@ export function ConfigPage() {
     activeTab === 'visual' &&
     (Object.values(visualValidationErrors).some(Boolean) || visualHasPayloadValidationErrors);
 
+  const getForwardRequestHeadersRisk = useCallback((): 'duplicate_key' | 'incomplete_row' | null => {
+    if (visualValidationErrors.forwardRequestHeaders) {
+      return 'duplicate_key';
+    }
+
+    const hasIncompleteForwardRequestHeaders = visualValues.forwardRequestHeaders.some((entry) => {
+      const key = String(entry?.key ?? '').trim();
+      const value = String(entry?.value ?? '').trim();
+      return (key && !value) || (!key && value);
+    });
+
+    return hasIncompleteForwardRequestHeaders ? 'incomplete_row' : null;
+  }, [visualValidationErrors.forwardRequestHeaders, visualValues.forwardRequestHeaders]);
+
+  const notifyForwardRequestHeadersRisk = useCallback(() => {
+    const forwardRequestHeadersRisk = getForwardRequestHeadersRisk();
+    if (!forwardRequestHeadersRisk) return false;
+
+    showNotification(
+      t(
+        forwardRequestHeadersRisk === 'duplicate_key'
+          ? 'config_management.visual.validation.duplicate_header_key'
+          : 'config_management.visual.validation.forward_request_headers_incomplete_row'
+      ),
+      'error'
+    );
+    return true;
+  }, [getForwardRequestHeadersRisk, showNotification, t]);
+
+  const hasForwardRequestHeadersRisk =
+    activeTab === 'visual' && !!getForwardRequestHeadersRisk();
+
+  const isSaveDisabled =
+    disableControls ||
+    loading ||
+    saving ||
+    !isDirty ||
+    diffModalOpen ||
+    hasVisualModeError ||
+    hasVisualValidationErrors ||
+    hasForwardRequestHeadersRisk;
+
   const loadConfig = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -174,6 +216,10 @@ export function ConfigPage() {
       return;
     }
 
+    if (activeTab === 'visual' && notifyForwardRequestHeadersRisk()) {
+      return;
+    }
+
     setSaving(true);
     try {
       const latestServerYaml = await configFileApi.fetchConfigYaml();
@@ -241,6 +287,10 @@ export function ConfigPage() {
       if (tab === activeTab) return;
 
       if (tab === 'source') {
+        if (notifyForwardRequestHeadersRisk()) {
+          return;
+        }
+
         // Only rewrite YAML when there are pending visual changes; otherwise preserve raw YAML + comments.
         if (visualDirty) {
           const nextContent = applyVisualChangesToYaml(content);
@@ -268,6 +318,7 @@ export function ConfigPage() {
       applyVisualChangesToYaml,
       content,
       loadVisualValuesFromYaml,
+      notifyForwardRequestHeadersRisk,
       showNotification,
       t,
       visualDirty,
@@ -481,15 +532,7 @@ export function ConfigPage() {
           type="button"
           className={styles.floatingActionButton}
           onClick={handleSave}
-          disabled={
-            disableControls ||
-            loading ||
-            saving ||
-            !isDirty ||
-            diffModalOpen ||
-            hasVisualModeError ||
-            hasVisualValidationErrors
-          }
+          disabled={isSaveDisabled}
           title={t('config_management.save')}
           aria-label={t('config_management.save')}
         >
