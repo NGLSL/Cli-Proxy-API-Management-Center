@@ -56,6 +56,7 @@ export interface UsageDetail {
   timestamp: string;
   source: string;
   auth_index: number;
+  first_byte_latency_ms?: number;
   latency_ms?: number;
   tokens: {
     input_tokens: number;
@@ -548,10 +549,16 @@ export function collectUsageDetails(usageData: unknown): UsageDetail[] {
         const timestampMs = Date.parse(timestamp);
         const tokensRaw = isRecord(detailRaw.tokens) ? detailRaw.tokens : {};
         const latencyMs = extractLatencyMs(detailRaw);
+        const firstByteLatencyMs =
+          typeof detailRaw.first_byte_latency_ms === 'number' &&
+          Number.isFinite(detailRaw.first_byte_latency_ms)
+            ? detailRaw.first_byte_latency_ms
+            : undefined;
         details.push({
           timestamp,
           source: normalizeSource(detailRaw.source),
           auth_index: detailRaw.auth_index as unknown as number,
+          first_byte_latency_ms: firstByteLatencyMs,
           latency_ms: latencyMs ?? undefined,
           tokens: tokensRaw as unknown as UsageDetail['tokens'],
           failed: detailRaw.failed === true,
@@ -621,10 +628,16 @@ export function collectUsageDetailsWithEndpoint(usageData: unknown): UsageDetail
         const timestampMs = Date.parse(timestamp);
         const tokensRaw = isRecord(detailRaw.tokens) ? detailRaw.tokens : {};
         const latencyMs = extractLatencyMs(detailRaw);
+        const firstByteLatencyMs =
+          typeof detailRaw.first_byte_latency_ms === 'number' &&
+          Number.isFinite(detailRaw.first_byte_latency_ms)
+            ? detailRaw.first_byte_latency_ms
+            : undefined;
         details.push({
           timestamp,
           source: normalizeSource(detailRaw.source),
           auth_index: detailRaw.auth_index as unknown as number,
+          first_byte_latency_ms: firstByteLatencyMs,
           latency_ms: latencyMs ?? undefined,
           tokens: tokensRaw as unknown as UsageDetail['tokens'],
           failed: detailRaw.failed === true,

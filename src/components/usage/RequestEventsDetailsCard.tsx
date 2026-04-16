@@ -34,11 +34,13 @@ type RequestEventRow = {
   sourceType: string;
   authIndex: string;
   failed: boolean;
+  firstByteLatencyMs: number | null;
   latencyMs: number | null;
   inputTokens: number;
   outputTokens: number;
   reasoningTokens: number;
   cachedTokens: number;
+  cacheRate: number | null;
   totalTokens: number;
 };
 
@@ -64,6 +66,42 @@ const encodeCsv = (value: string | number): string => {
   const safeText = trimmedLeft && /^[=+\-@]/.test(trimmedLeft) ? `'${text}` : text;
   return `"${safeText.replace(/"/g, '""')}"`;
 };
+
+const formatPercent = (value: number | null): string => {
+  if (value === null || !Number.isFinite(value)) {
+    return '--';
+  }
+  return `${(value * 100).toFixed(1)}%`;
+};
+
+const extractFirstByteLatencyMs = (value: unknown): number | null => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return null;
+  }
+  return value;
+};
+
+const calculateCacheRate = (cachedTokens: number, totalTokens: number): number | null => {
+  if (totalTokens <= 0) {
+    return null;
+  }
+  return Math.max(cachedTokens, 0) / totalTokens;
+};
+
+const getExportCacheRate = (value: number | null): string => {
+  if (value === null || !Number.isFinite(value)) {
+    return '';
+  }
+  return value.toFixed(4);
+};
+
+const buildExportJsonTokens = (row: RequestEventRow) => ({
+  input_tokens: row.inputTokens,
+  output_tokens: row.outputTokens,
+  reasoning_tokens: row.reasoningTokens,
+  cached_tokens: row.cachedTokens,
+  total_tokens: row.totalTokens,
+});
 
 export function RequestEventsDetailsCard({
   usage,
@@ -159,7 +197,9 @@ export function RequestEventsDetailsCard({
           toNumber(detail.tokens?.total_tokens),
           extractTotalTokens(detail)
         );
+        const firstByteLatencyMs = extractFirstByteLatencyMs(detail.first_byte_latency_ms);
         const latencyMs = extractLatencyMs(detail);
+        const cacheRate = calculateCacheRate(cachedTokens, totalTokens);
 
         return {
           id: `${timestamp}-${model}-${sourceRaw || source}-${authIndex}-${index}`,
@@ -172,17 +212,23 @@ export function RequestEventsDetailsCard({
           sourceType,
           authIndex,
           failed: detail.failed === true,
+          firstByteLatencyMs,
           latencyMs,
           inputTokens,
           outputTokens,
           reasoningTokens,
           cachedTokens,
+          cacheRate,
           totalTokens,
         };
       })
       .sort((a, b) => b.timestampMs - a.timestampMs);
   }, [authFileMap, i18n.language, sourceInfoMap, usage]);
 
+  const hasFirstByteLatencyData = useMemo(
+    () => rows.some((row) => row.firstByteLatencyMs !== null),
+    [rows]
+  );
   const hasLatencyData = useMemo(() => rows.some((row) => row.latencyMs !== null), [rows]);
 
   const modelOptions = useMemo(
@@ -274,11 +320,13 @@ export function RequestEventsDetailsCard({
       'source_raw',
       'auth_index',
       'result',
+      ...(hasFirstByteLatencyData ? ['first_byte_latency_ms'] : []),
       ...(hasLatencyData ? ['latency_ms'] : []),
       'input_tokens',
       'output_tokens',
       'reasoning_tokens',
       'cached_tokens',
+      'cache_rate',
       'total_tokens',
     ];
 
@@ -290,11 +338,13 @@ export function RequestEventsDetailsCard({
         row.sourceRaw,
         row.authIndex,
         row.failed ? 'failed' : 'success',
+        ...(hasFirstByteLatencyData ? [row.firstByteLatencyMs ?? ''] : []),
         ...(hasLatencyData ? [row.latencyMs ?? ''] : []),
         row.inputTokens,
         row.outputTokens,
         row.reasoningTokens,
         row.cachedTokens,
+        getExportCacheRate(row.cacheRate),
         row.totalTokens,
       ]
         .map((value) => encodeCsv(value))
@@ -319,14 +369,12 @@ export function RequestEventsDetailsCard({
       source_raw: row.sourceRaw,
       auth_index: row.authIndex,
       failed: row.failed,
+      ...(hasFirstByteLatencyData && row.firstByteLatencyMs !== null
+        ? { first_byte_latency_ms: row.firstByteLatencyMs }
+        : {}),
       ...(hasLatencyData && row.latencyMs !== null ? { latency_ms: row.latencyMs } : {}),
-      tokens: {
-        input_tokens: row.inputTokens,
-        output_tokens: row.outputTokens,
-        reasoning_tokens: row.reasoningTokens,
-        cached_tokens: row.cachedTokens,
-        total_tokens: row.totalTokens,
-      },
+      ...(row.cacheRate !== null ? { cache_rate: row.cacheRate } : {}),
+      tokens: buildExportJsonTokens(row),
     }));
 
     const content = JSON.stringify(payload, null, 2);
@@ -447,11 +495,15 @@ export function RequestEventsDetailsCard({
                   <th>{t('usage_stats.request_events_source')}</th>
                   <th>{t('usage_stats.request_events_auth_index')}</th>
                   <th>{t('usage_stats.request_events_result')}</th>
+                  {hasFirstByteLatencyData && (
+                    <th title={latencyHint}>{t('usage_stats.first_byte_latency')}</th>
+                  )}
                   {hasLatencyData && <th title={latencyHint}>{t('usage_stats.time')}</th>}
                   <th>{t('usage_stats.input_tokens')}</th>
                   <th>{t('usage_stats.output_tokens')}</th>
                   <th>{t('usage_stats.reasoning_tokens')}</th>
                   <th>{t('usage_stats.cached_tokens')}</th>
+                  <th>{t('usage_stats.cache_rate')}</th>
                   <th>{t('usage_stats.total_tokens')}</th>
                 </tr>
               </thead>
@@ -482,6 +534,11 @@ export function RequestEventsDetailsCard({
                         {row.failed ? t('stats.failure') : t('stats.success')}
                       </span>
                     </td>
+                    {hasFirstByteLatencyData && (
+                      <td className={styles.durationCell}>
+                        {formatDurationMs(row.firstByteLatencyMs)}
+                      </td>
+                    )}
                     {hasLatencyData && (
                       <td className={styles.durationCell}>{formatDurationMs(row.latencyMs)}</td>
                     )}
@@ -489,6 +546,7 @@ export function RequestEventsDetailsCard({
                     <td>{row.outputTokens.toLocaleString()}</td>
                     <td>{row.reasoningTokens.toLocaleString()}</td>
                     <td>{row.cachedTokens.toLocaleString()}</td>
+                    <td>{formatPercent(row.cacheRate)}</td>
                     <td>{row.totalTokens.toLocaleString()}</td>
                   </tr>
                 ))}
