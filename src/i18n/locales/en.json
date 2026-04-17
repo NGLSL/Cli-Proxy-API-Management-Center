@@ -183,10 +183,11 @@
     "ws_auth_enable": "Require auth for /ws/*",
     "routing_title": "Routing Strategy",
     "routing_strategy_label": "Routing strategy:",
-    "routing_strategy_hint": "round-robin cycles through keys; fill-first prioritizes the first available key.",
+    "routing_strategy_hint": "round-robin cycles through keys; fill-first prioritizes the first available key; sticky-round-robin keeps a sticky cycle per access identity.",
     "routing_strategy_update": "Update",
     "routing_strategy_round_robin": "round-robin (cycle)",
-    "routing_strategy_fill_first": "fill-first (prioritize)"
+    "routing_strategy_fill_first": "fill-first (prioritize)",
+    "routing_strategy_sticky_round_robin": "sticky-round-robin (sticky cycle)"
   },
   "api_keys": {
     "title": "API Keys Management",
@@ -1271,9 +1272,12 @@
           "max_retry_credentials_hint": "Leave empty to keep it unset. Set to 0 to preserve legacy behavior and try all available credentials.",
           "max_retry_interval": "Max Retry Interval (seconds)",
           "routing_strategy": "Routing Strategy",
-          "routing_strategy_hint": "Select credential selection strategy",
+          "routing_strategy_hint": "Select the credential selection strategy. sticky-round-robin reuses the same sticky route per access identity until the TTL expires.",
           "strategy_round_robin": "Round Robin",
+          "strategy_sticky_round_robin": "Sticky Round Robin",
           "strategy_fill_first": "Fill First",
+          "sticky_ttl": "Sticky TTL (seconds)",
+          "sticky_ttl_hint": "Leave empty to keep it unset; only applies to sticky-round-robin.",
           "force_model_prefix": "Force Model Prefix",
           "force_model_prefix_desc": "Unprefixed model requests only use credentials without prefix",
           "forward_request_headers_title": "Global Forward Headers",

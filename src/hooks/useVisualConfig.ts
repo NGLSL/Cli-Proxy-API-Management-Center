@@ -184,6 +184,10 @@ export function getVisualConfigValidationErrors(
     forwardRequestHeaders: getDuplicateHeaderKeyError(values.forwardRequestHeaders),
     maxRetryCredentials: getNonNegativeIntegerError(values.maxRetryCredentials),
     maxRetryInterval: getNonNegativeIntegerError(values.maxRetryInterval),
+    routingStickyTTL:
+      values.routingStrategy === 'sticky-round-robin'
+        ? getNonNegativeIntegerError(values.routingStickyTTL)
+        : undefined,
     'streaming.keepaliveSeconds': getNonNegativeIntegerError(values.streaming.keepaliveSeconds),
     'streaming.bootstrapRetries': getNonNegativeIntegerError(values.streaming.bootstrapRetries),
     'streaming.nonstreamKeepaliveInterval': getNonNegativeIntegerError(
@@ -735,6 +739,9 @@ function getNextDirtyFields(
   if (Object.prototype.hasOwnProperty.call(patch, 'routingStrategy')) {
     updateDirty('routingStrategy', nextValues.routingStrategy === baselineValues.routingStrategy);
   }
+  if (Object.prototype.hasOwnProperty.call(patch, 'routingStickyTTL')) {
+    updateDirty('routingStickyTTL', nextValues.routingStickyTTL === baselineValues.routingStickyTTL);
+  }
   if (Object.prototype.hasOwnProperty.call(patch, 'payloadDefaultRules')) {
     updateDirty(
       'payloadDefaultRules',
@@ -909,13 +916,19 @@ export function useVisualConfig() {
         forwardRequestHeaders: parseHeaderEntries(parsed['forward-request-headers']),
         maxRetryCredentials: String(parsed['max-retry-credentials'] ?? ''),
         maxRetryInterval: String(parsed['max-retry-interval'] ?? ''),
+        routingStickyTTL: String(routing?.['sticky-ttl'] ?? ''),
         wsAuth: Boolean(parsed['ws-auth']),
 
         quotaSwitchProject: Boolean(quotaExceeded?.['switch-project'] ?? true),
         quotaSwitchPreviewModel: Boolean(quotaExceeded?.['switch-preview-model'] ?? true),
         quotaAntigravityCredits: Boolean(quotaExceeded?.['antigravity-credits'] ?? true),
 
-        routingStrategy: routing?.strategy === 'fill-first' ? 'fill-first' : 'round-robin',
+        routingStrategy:
+          routing?.strategy === 'fill-first'
+            ? 'fill-first'
+            : routing?.strategy === 'sticky-round-robin'
+              ? 'sticky-round-robin'
+              : 'round-robin',
 
         payloadDefaultRules: parsePayloadRules(payload?.default),
         payloadDefaultRawRules: parseRawPayloadRules(payload?.['default-raw']),
@@ -1030,9 +1043,27 @@ export function useVisualConfig() {
           deleteIfMapEmpty(doc, ['quota-exceeded']);
         }
 
-        if (docHas(doc, ['routing']) || values.routingStrategy !== 'round-robin') {
+        const routingStickyTTL =
+          typeof values.routingStickyTTL === 'string' ? values.routingStickyTTL : '';
+        const shouldWriteRoutingStickyTTL = values.routingStrategy === 'sticky-round-robin';
+        const routingDefined =
+          docHas(doc, ['routing']) ||
+          values.routingStrategy !== 'round-robin' ||
+          (shouldWriteRoutingStickyTTL && routingStickyTTL.trim());
+        if (routingDefined) {
           ensureMapInDoc(doc, ['routing']);
-          doc.setIn(['routing', 'strategy'], values.routingStrategy);
+          if (values.routingStrategy === 'round-robin') {
+            if (docHas(doc, ['routing', 'strategy'])) {
+              doc.deleteIn(['routing', 'strategy']);
+            }
+          } else {
+            doc.setIn(['routing', 'strategy'], values.routingStrategy);
+          }
+          if (shouldWriteRoutingStickyTTL) {
+            setIntFromStringInDoc(doc, ['routing', 'sticky-ttl'], routingStickyTTL);
+          } else if (docHas(doc, ['routing', 'sticky-ttl'])) {
+            doc.deleteIn(['routing', 'sticky-ttl']);
+          }
           deleteIfMapEmpty(doc, ['routing']);
         }
 

@@ -25,6 +25,7 @@ export interface Config {
   wsAuth?: boolean;
   forceModelPrefix?: boolean;
   routingStrategy?: string;
+  routingStickyTTL?: number;
   apiKeys?: string[];
   ampcode?: AmpcodeConfig;
   geminiApiKeys?: GeminiKeyConfig[];
@@ -49,6 +50,7 @@ export type RawConfigSection =
   | 'ws-auth'
   | 'force-model-prefix'
   | 'routing/strategy'
+  | 'routing/sticky-ttl'
   | 'api-keys'
   | 'ampcode'
   | 'gemini-api-key'

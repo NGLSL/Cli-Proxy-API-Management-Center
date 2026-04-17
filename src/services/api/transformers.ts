@@ -404,6 +404,17 @@ export const normalizeConfigResponse = (raw: unknown): Config => {
   if (strategyRaw !== undefined && strategyRaw !== null) {
     config.routingStrategy = String(strategyRaw);
   }
+  const stickyTTLRaw = isRecord(routing)
+    ? (routing['sticky-ttl'] ?? routing.stickyTTL)
+    : (raw['routing-sticky-ttl'] ?? raw.routingStickyTTL);
+  if (typeof stickyTTLRaw === 'number' && Number.isFinite(stickyTTLRaw)) {
+    config.routingStickyTTL = stickyTTLRaw;
+  } else if (typeof stickyTTLRaw === 'string' && stickyTTLRaw.trim() !== '') {
+    const parsed = Number(stickyTTLRaw);
+    if (Number.isFinite(parsed)) {
+      config.routingStickyTTL = parsed;
+    }
+  }
   const apiKeysRaw = raw['api-keys'] ?? raw.apiKeys;
   if (Array.isArray(apiKeysRaw)) {
     config.apiKeys = apiKeysRaw.map((key) => String(key)).filter((key) => key.trim() !== '');

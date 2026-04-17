@@ -251,12 +251,14 @@ export function DashboardPage() {
       ? t('basic_settings.routing_strategy_round_robin')
       : routingStrategyRaw === 'fill-first'
         ? t('basic_settings.routing_strategy_fill_first')
-        : routingStrategyRaw;
+        : routingStrategyRaw === 'sticky-round-robin'
+          ? t('basic_settings.routing_strategy_sticky_round_robin')
+          : routingStrategyRaw;
   const routingStrategyBadgeClass = !routingStrategyRaw
     ? styles.configBadgeUnknown
     : routingStrategyRaw === 'round-robin'
       ? styles.configBadgeRoundRobin
-      : routingStrategyRaw === 'fill-first'
+      : routingStrategyRaw === 'fill-first' || routingStrategyRaw === 'sticky-round-robin'
         ? styles.configBadgeFillFirst
         : styles.configBadgeUnknown;
 

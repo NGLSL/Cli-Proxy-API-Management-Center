@@ -13,6 +13,7 @@ export type VisualConfigFieldPath =
   | 'forwardRequestHeaders'
   | 'maxRetryCredentials'
   | 'maxRetryInterval'
+  | 'routingStickyTTL'
   | 'streaming.keepaliveSeconds'
   | 'streaming.bootstrapRetries'
   | 'streaming.nonstreamKeepaliveInterval';
@@ -80,10 +81,11 @@ export type VisualConfigValues = {
   forwardRequestHeaders: HeaderEntry[];
   maxRetryCredentials: string;
   maxRetryInterval: string;
+  routingStickyTTL: string;
   quotaSwitchProject: boolean;
   quotaSwitchPreviewModel: boolean;
   quotaAntigravityCredits: boolean;
-  routingStrategy: 'round-robin' | 'fill-first';
+  routingStrategy: 'round-robin' | 'fill-first' | 'sticky-round-robin';
   wsAuth: boolean;
   payloadDefaultRules: PayloadRule[];
   payloadDefaultRawRules: PayloadRule[];
@@ -121,6 +123,7 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
   forwardRequestHeaders: [],
   maxRetryCredentials: '',
   maxRetryInterval: '',
+  routingStickyTTL: '',
   quotaSwitchProject: true,
   quotaSwitchPreviewModel: true,
   quotaAntigravityCredits: true,

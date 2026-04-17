@@ -186,6 +186,7 @@ export function VisualConfigEditor({
   const shouldRenderFloatingSidebar = !isMobile && isFloatingSidebar && isCurrentLayer;
   const routingStrategyLabelId = useId();
   const routingStrategyHintId = `${routingStrategyLabelId}-hint`;
+  const stickyTTLInputId = useId();
   const keepaliveInputId = useId();
   const keepaliveHintId = `${keepaliveInputId}-hint`;
   const keepaliveErrorId = `${keepaliveInputId}-error`;
@@ -219,6 +220,7 @@ export function VisualConfigEditor({
   );
   const maxRetryCredentialsError = getValidationMessage(t, validationErrors?.maxRetryCredentials);
   const maxRetryIntervalError = getValidationMessage(t, validationErrors?.maxRetryInterval);
+  const routingStickyTTLError = getValidationMessage(t, validationErrors?.routingStickyTTL);
   const keepaliveError = getValidationMessage(t, validationErrors?.['streaming.keepaliveSeconds']);
   const bootstrapRetriesError = getValidationMessage(
     t,
@@ -307,6 +309,7 @@ export function VisualConfigEditor({
           'forwardRequestHeaders',
           'maxRetryCredentials',
           'maxRetryInterval',
+          'routingStickyTTL',
         ]),
       },
       {
@@ -885,6 +888,12 @@ export function VisualConfigEditor({
                         label: t('config_management.visual.sections.network.strategy_round_robin'),
                       },
                       {
+                        value: 'sticky-round-robin',
+                        label: t(
+                          'config_management.visual.sections.network.strategy_sticky_round_robin'
+                        ),
+                      },
+                      {
                         value: 'fill-first',
                         label: t('config_management.visual.sections.network.strategy_fill_first'),
                       },
@@ -900,6 +909,19 @@ export function VisualConfigEditor({
                     }
                   />
                 </FieldShell>
+                {values.routingStrategy === 'sticky-round-robin' && (
+                  <Input
+                    label={t('config_management.visual.sections.network.sticky_ttl')}
+                    type="number"
+                    placeholder="0"
+                    value={values.routingStickyTTL}
+                    onChange={(e) => onChange({ routingStickyTTL: e.target.value })}
+                    disabled={disabled}
+                    hint={t('config_management.visual.sections.network.sticky_ttl_hint')}
+                    id={stickyTTLInputId}
+                    error={routingStickyTTLError}
+                  />
+                )}
               </SectionGrid>
 
               <SectionGrid>

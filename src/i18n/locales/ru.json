@@ -183,10 +183,11 @@
     "ws_auth_enable": "Требовать аутентификацию для /ws/*",
     "routing_title": "Стратегия маршрутизации",
     "routing_strategy_label": "Стратегия маршрутизации:",
-    "routing_strategy_hint": "round-robin циклически перебирает ключи; fill-first отдаёт приоритет первому доступному ключу.",
+    "routing_strategy_hint": "round-robin циклически перебирает ключи; fill-first отдаёт приоритет первому доступному ключу; sticky-round-robin сохраняет липкий цикл для каждой входной identity.",
     "routing_strategy_update": "Обновить",
     "routing_strategy_round_robin": "round-robin (цикл)",
-    "routing_strategy_fill_first": "fill-first (приоритет)"
+    "routing_strategy_fill_first": "fill-first (приоритет)",
+    "routing_strategy_sticky_round_robin": "sticky-round-robin (липкий цикл)"
   },
   "api_keys": {
     "title": "Управление API-ключами",
@@ -1270,9 +1271,12 @@
           "max_retry_credentials_hint": "Оставьте пустым, чтобы не задавать поле. Значение 0 сохраняет legacy-поведение и позволяет перебрать все доступные учётные данные.",
           "max_retry_interval": "Максимальный интервал повтора (сек)",
           "routing_strategy": "Стратегия маршрутизации",
-          "routing_strategy_hint": "Выберите стратегию подбора учётных данных",
+          "routing_strategy_hint": "Выберите стратегию подбора учётных данных; sticky-round-robin повторно использует один и тот же липкий маршрут для входной identity, пока не истечёт TTL.",
           "strategy_round_robin": "По кругу",
+          "strategy_sticky_round_robin": "Липкий цикл",
           "strategy_fill_first": "Сначала заполнить",
+          "sticky_ttl": "Sticky TTL (сек)",
+          "sticky_ttl_hint": "Оставьте пустым, чтобы не задавать поле; применяется только к sticky-round-robin.",
           "force_model_prefix": "Принудительный префикс модели",
           "force_model_prefix_desc": "Запросы к моделям без префикса используют только учётные данные без префикса",
           "forward_request_headers_title": "Глобальные заголовки переадресации",
