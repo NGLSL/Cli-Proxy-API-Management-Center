@@ -58,6 +58,9 @@ export interface UsageDetail {
   auth_index: number;
   first_byte_latency_ms?: number;
   latency_ms?: number;
+  chunk_count?: number;
+  response_bytes?: number;
+  api_response_bytes?: number;
   tokens: {
     input_tokens: number;
     output_tokens: number;
@@ -501,6 +504,13 @@ export function formatUsd(value: number): string {
 const usageDetailsCache = new WeakMap<object, UsageDetail[]>();
 const usageDetailsWithEndpointCache = new WeakMap<object, UsageDetailWithEndpoint[]>();
 
+const extractUsageMetricValue = (value: unknown): number | undefined => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return undefined;
+  }
+  return value;
+};
+
 /**
  * 从使用数据中收集所有请求明细
  */
@@ -554,12 +564,18 @@ export function collectUsageDetails(usageData: unknown): UsageDetail[] {
           Number.isFinite(detailRaw.first_byte_latency_ms)
             ? detailRaw.first_byte_latency_ms
             : undefined;
+        const chunkCount = extractUsageMetricValue(detailRaw.chunk_count);
+        const responseBytes = extractUsageMetricValue(detailRaw.response_bytes);
+        const apiResponseBytes = extractUsageMetricValue(detailRaw.api_response_bytes);
         details.push({
           timestamp,
           source: normalizeSource(detailRaw.source),
           auth_index: detailRaw.auth_index as unknown as number,
           first_byte_latency_ms: firstByteLatencyMs,
           latency_ms: latencyMs ?? undefined,
+          chunk_count: chunkCount,
+          response_bytes: responseBytes,
+          api_response_bytes: apiResponseBytes,
           tokens: tokensRaw as unknown as UsageDetail['tokens'],
           failed: detailRaw.failed === true,
           __modelName: modelName,
@@ -633,12 +649,18 @@ export function collectUsageDetailsWithEndpoint(usageData: unknown): UsageDetail
           Number.isFinite(detailRaw.first_byte_latency_ms)
             ? detailRaw.first_byte_latency_ms
             : undefined;
+        const chunkCount = extractUsageMetricValue(detailRaw.chunk_count);
+        const responseBytes = extractUsageMetricValue(detailRaw.response_bytes);
+        const apiResponseBytes = extractUsageMetricValue(detailRaw.api_response_bytes);
         details.push({
           timestamp,
           source: normalizeSource(detailRaw.source),
           auth_index: detailRaw.auth_index as unknown as number,
           first_byte_latency_ms: firstByteLatencyMs,
           latency_ms: latencyMs ?? undefined,
+          chunk_count: chunkCount,
+          response_bytes: responseBytes,
+          api_response_bytes: apiResponseBytes,
           tokens: tokensRaw as unknown as UsageDetail['tokens'],
           failed: detailRaw.failed === true,
           __modelName: modelName,

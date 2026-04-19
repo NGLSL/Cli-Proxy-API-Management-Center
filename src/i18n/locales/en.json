@@ -1061,6 +1061,9 @@
     "request_events_no_result_desc": "Try different filters or clear the current filters.",
     "request_events_count": "{{count}} events",
     "request_events_limit_hint": "Showing {{shown}} of {{total}} events to keep rendering responsive.",
+    "chunk_count": "Chunk Count",
+    "response_bytes": "Response Bytes",
+    "api_response_bytes": "Upstream Response Bytes",
     "input_tokens": "Input Tokens",
     "output_tokens": "Output Tokens",
     "last_updated": "Updated"

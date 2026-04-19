@@ -36,6 +36,9 @@ type RequestEventRow = {
   failed: boolean;
   firstByteLatencyMs: number | null;
   latencyMs: number | null;
+  chunkCount: number | null;
+  responseBytes: number | null;
+  apiResponseBytes: number | null;
   inputTokens: number;
   outputTokens: number;
   reasoningTokens: number;
@@ -75,6 +78,13 @@ const formatPercent = (value: number | null): string => {
 };
 
 const extractFirstByteLatencyMs = (value: unknown): number | null => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return null;
+  }
+  return value;
+};
+
+const extractMetric = (value: unknown): number | null => {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
     return null;
   }
@@ -200,6 +210,9 @@ export function RequestEventsDetailsCard({
         const firstByteLatencyMs = extractFirstByteLatencyMs(detail.first_byte_latency_ms);
         const latencyMs = extractLatencyMs(detail);
         const cacheRate = calculateCacheRate(cachedTokens, totalTokens);
+        const chunkCount = extractMetric(detail.chunk_count);
+        const responseBytes = extractMetric(detail.response_bytes);
+        const apiResponseBytes = extractMetric(detail.api_response_bytes);
 
         return {
           id: `${timestamp}-${model}-${sourceRaw || source}-${authIndex}-${index}`,
@@ -214,6 +227,9 @@ export function RequestEventsDetailsCard({
           failed: detail.failed === true,
           firstByteLatencyMs,
           latencyMs,
+          chunkCount,
+          responseBytes,
+          apiResponseBytes,
           inputTokens,
           outputTokens,
           reasoningTokens,
@@ -322,6 +338,9 @@ export function RequestEventsDetailsCard({
       'result',
       ...(hasFirstByteLatencyData ? ['first_byte_latency_ms'] : []),
       ...(hasLatencyData ? ['latency_ms'] : []),
+      'chunk_count',
+      'response_bytes',
+      'api_response_bytes',
       'input_tokens',
       'output_tokens',
       'reasoning_tokens',
@@ -340,6 +359,9 @@ export function RequestEventsDetailsCard({
         row.failed ? 'failed' : 'success',
         ...(hasFirstByteLatencyData ? [row.firstByteLatencyMs ?? ''] : []),
         ...(hasLatencyData ? [row.latencyMs ?? ''] : []),
+        row.chunkCount ?? '',
+        row.responseBytes ?? '',
+        row.apiResponseBytes ?? '',
         row.inputTokens,
         row.outputTokens,
         row.reasoningTokens,
@@ -373,6 +395,9 @@ export function RequestEventsDetailsCard({
         ? { first_byte_latency_ms: row.firstByteLatencyMs }
         : {}),
       ...(hasLatencyData && row.latencyMs !== null ? { latency_ms: row.latencyMs } : {}),
+      ...(row.chunkCount !== null ? { chunk_count: row.chunkCount } : {}),
+      ...(row.responseBytes !== null ? { response_bytes: row.responseBytes } : {}),
+      ...(row.apiResponseBytes !== null ? { api_response_bytes: row.apiResponseBytes } : {}),
       ...(row.cacheRate !== null ? { cache_rate: row.cacheRate } : {}),
       tokens: buildExportJsonTokens(row),
     }));
@@ -499,6 +524,9 @@ export function RequestEventsDetailsCard({
                     <th title={latencyHint}>{t('usage_stats.first_byte_latency')}</th>
                   )}
                   {hasLatencyData && <th title={latencyHint}>{t('usage_stats.time')}</th>}
+                  <th>{t('usage_stats.chunk_count')}</th>
+                  <th>{t('usage_stats.response_bytes')}</th>
+                  <th>{t('usage_stats.api_response_bytes')}</th>
                   <th>{t('usage_stats.input_tokens')}</th>
                   <th>{t('usage_stats.output_tokens')}</th>
                   <th>{t('usage_stats.reasoning_tokens')}</th>
@@ -542,6 +570,9 @@ export function RequestEventsDetailsCard({
                     {hasLatencyData && (
                       <td className={styles.durationCell}>{formatDurationMs(row.latencyMs)}</td>
                     )}
+                    <td>{row.chunkCount !== null ? row.chunkCount.toLocaleString() : '--'}</td>
+                    <td>{row.responseBytes !== null ? row.responseBytes.toLocaleString() : '--'}</td>
+                    <td>{row.apiResponseBytes !== null ? row.apiResponseBytes.toLocaleString() : '--'}</td>
                     <td>{row.inputTokens.toLocaleString()}</td>
                     <td>{row.outputTokens.toLocaleString()}</td>
                     <td>{row.reasoningTokens.toLocaleString()}</td>
