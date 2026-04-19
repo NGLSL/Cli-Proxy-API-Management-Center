@@ -51,6 +51,8 @@ export interface StatCardsProps {
     rpm: SparklineBundle | null;
     tpm: SparklineBundle | null;
     cost: SparklineBundle | null;
+    chunks: SparklineBundle | null;
+    traffic: SparklineBundle | null;
   };
 }
 
@@ -209,7 +211,7 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
           </span>
         </>
       ),
-      trend: null,
+      trend: sparklines.chunks,
     },
     {
       key: 'traffic',
@@ -229,7 +231,7 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
           </span>
         </>
       ),
-      trend: null,
+      trend: sparklines.traffic,
     },
     {
       key: 'tokens',

@@ -1063,7 +1063,7 @@
     "request_events_limit_hint": "为保证渲染性能，仅展示 {{shown}} / {{total}} 条事件。",
     "chunk_count": "Chunk 数",
     "total_chunk_count": "Chunk 总数",
-    "avg_chunk_per_request": "平均每请求 Chunk 数",
+    "avg_chunk_per_request": "平均 Chunk",
     "traffic_stats": "流量统计",
     "response_bytes": "下游响应字节",
     "api_response_bytes": "上游响应字节",

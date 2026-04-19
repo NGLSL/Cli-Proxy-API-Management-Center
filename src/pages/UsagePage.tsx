@@ -38,6 +38,7 @@ import {
   getApiStats,
   getModelStats,
   filterUsageByTimeRange,
+  collectUsageDetails,
   type UsageTimeRange
 } from '@/utils/usage';
 import styles from './UsagePage.module.scss';
@@ -154,9 +155,21 @@ export function UsagePage() {
     [t]
   );
 
+  const nowMs = lastRefreshedAt?.getTime() ?? 0;
+  const usageLatestTimestampMs = useMemo(() => {
+    if (!usage) {
+      return 0;
+    }
+    return collectUsageDetails(usage).reduce((max, detail) => {
+      const timestamp = detail.__timestampMs ?? 0;
+      return Number.isFinite(timestamp) && timestamp > 0 ? Math.max(max, timestamp) : max;
+    }, 0);
+  }, [usage]);
+  const filterReferenceMs = nowMs > 0 ? nowMs : usageLatestTimestampMs;
+
   const filteredUsage = useMemo(
-    () => (usage ? filterUsageByTimeRange(usage, timeRange) : null),
-    [usage, timeRange]
+    () => (usage ? filterUsageByTimeRange(usage, timeRange, filterReferenceMs) : null),
+    [filterReferenceMs, usage, timeRange]
   );
   const hourWindowHours =
     timeRange === 'all' ? undefined : HOUR_WINDOW_BY_TIME_RANGE[timeRange];
@@ -187,15 +200,14 @@ export function UsagePage() {
     }
   }, [timeRange]);
 
-  const nowMs = lastRefreshedAt?.getTime() ?? 0;
-
-  // Sparklines hook
   const {
     requestsSparkline,
     tokensSparkline,
     rpmSparkline,
     tpmSparkline,
-    costSparkline
+    costSparkline,
+    chunksSparkline,
+    trafficSparkline
   } = useSparklines({ usage: filteredUsage, loading, nowMs });
 
   // Chart data hook
@@ -301,7 +313,9 @@ export function UsagePage() {
           tokens: tokensSparkline,
           rpm: rpmSparkline,
           tpm: tpmSparkline,
-          cost: costSparkline
+          cost: costSparkline,
+          chunks: chunksSparkline,
+          traffic: trafficSparkline
         }}
       />
 

@@ -1060,7 +1060,7 @@
     "request_events_limit_hint": "Показано {{shown}} из {{total}} событий для стабильной производительности.",
     "chunk_count": "Количество chunk",
     "total_chunk_count": "Всего chunk",
-    "avg_chunk_per_request": "Среднее chunk на запрос",
+    "avg_chunk_per_request": "Среднее chunk",
     "traffic_stats": "Трафик",
     "response_bytes": "Байты ответа",
     "api_response_bytes": "Байты upstream-ответа",

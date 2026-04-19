@@ -33,44 +33,102 @@ export interface UseSparklinesReturn {
   rpmSparkline: SparklineBundle | null;
   tpmSparkline: SparklineBundle | null;
   costSparkline: SparklineBundle | null;
+  chunksSparkline: SparklineBundle | null;
+  trafficSparkline: SparklineBundle | null;
 }
 
 export function useSparklines({ usage, loading, nowMs }: UseSparklinesOptions): UseSparklinesReturn {
   const lastHourSeries = useMemo(() => {
-    if (!usage) return { labels: [], requests: [], tokens: [] };
-    if (!Number.isFinite(nowMs) || nowMs <= 0) {
-      return { labels: [], requests: [], tokens: [] };
+    if (!usage) {
+      return {
+        labels: [],
+        requests: [],
+        tokens: [],
+        chunks: [],
+        traffic: []
+      };
     }
     const details = collectUsageDetails(usage);
-    if (!details.length) return { labels: [], requests: [], tokens: [] };
+    if (!details.length) {
+      return {
+        labels: [],
+        requests: [],
+        tokens: [],
+        chunks: [],
+        traffic: []
+      };
+    }
 
-    const windowMinutes = 60;
-    const now = nowMs;
-    const windowStart = now - windowMinutes * 60 * 1000;
-    const requestBuckets = new Array(windowMinutes).fill(0);
-    const tokenBuckets = new Array(windowMinutes).fill(0);
+    const minTimestamp = details.reduce((min, detail) => {
+      const timestamp = detail.__timestampMs ?? 0;
+      return Number.isFinite(timestamp) && timestamp > 0 ? Math.min(min, timestamp) : min;
+    }, Number.POSITIVE_INFINITY);
+    const maxTimestamp = details.reduce((max, detail) => {
+      const timestamp = detail.__timestampMs ?? 0;
+      return Number.isFinite(timestamp) && timestamp > 0 ? Math.max(max, timestamp) : max;
+    }, 0);
+    const fallbackNow = Number.isFinite(nowMs) && nowMs > 0 ? nowMs : 0;
+    const windowEnd = maxTimestamp > 0 ? maxTimestamp : fallbackNow;
+    if (!Number.isFinite(minTimestamp) || minTimestamp <= 0 || !Number.isFinite(windowEnd) || windowEnd <= 0) {
+      return {
+        labels: [],
+        requests: [],
+        tokens: [],
+        chunks: [],
+        traffic: []
+      };
+    }
+
+    const maxBuckets = 60;
+    const spanMs = Math.max(1, windowEnd - minTimestamp + 1);
+    const bucketMs = Math.max(60000, Math.ceil(spanMs / maxBuckets));
+    const bucketCount = Math.max(1, Math.min(maxBuckets, Math.ceil(spanMs / bucketMs)));
+    const windowStart = windowEnd - bucketMs * bucketCount;
+    const requestBuckets = new Array(bucketCount).fill(0);
+    const tokenBuckets = new Array(bucketCount).fill(0);
+    const chunkBuckets = new Array(bucketCount).fill(0);
+    const trafficBuckets = new Array(bucketCount).fill(0);
 
     details.forEach((detail) => {
       const timestamp = detail.__timestampMs ?? 0;
-      if (!Number.isFinite(timestamp) || timestamp < windowStart || timestamp > now) {
+      if (!Number.isFinite(timestamp) || timestamp < windowStart || timestamp > windowEnd) {
         return;
       }
-      const minuteIndex = Math.min(
-        windowMinutes - 1,
-        Math.floor((timestamp - windowStart) / 60000)
+      const bucketIndex = Math.min(
+        bucketCount - 1,
+        Math.max(0, Math.floor((timestamp - windowStart) / bucketMs))
       );
-      requestBuckets[minuteIndex] += 1;
-      tokenBuckets[minuteIndex] += extractTotalTokens(detail);
+      requestBuckets[bucketIndex] += 1;
+      tokenBuckets[bucketIndex] += extractTotalTokens(detail);
+      chunkBuckets[bucketIndex] +=
+        typeof detail.chunk_count === 'number' && Number.isFinite(detail.chunk_count)
+          ? Math.max(detail.chunk_count, 0)
+          : 0;
+      const responseBytes =
+        typeof detail.response_bytes === 'number' && Number.isFinite(detail.response_bytes)
+          ? Math.max(detail.response_bytes, 0)
+          : 0;
+      const apiResponseBytes =
+        typeof detail.api_response_bytes === 'number' && Number.isFinite(detail.api_response_bytes)
+          ? Math.max(detail.api_response_bytes, 0)
+          : 0;
+      trafficBuckets[bucketIndex] += responseBytes + apiResponseBytes;
     });
 
     const labels = requestBuckets.map((_, idx) => {
-      const date = new Date(windowStart + (idx + 1) * 60000);
+      const date = new Date(windowStart + (idx + 1) * bucketMs);
       const h = date.getHours().toString().padStart(2, '0');
       const m = date.getMinutes().toString().padStart(2, '0');
       return `${h}:${m}`;
     });
 
-    return { labels, requests: requestBuckets, tokens: tokenBuckets };
+    return {
+      labels,
+      requests: requestBuckets,
+      tokens: tokenBuckets,
+      chunks: chunkBuckets,
+      traffic: trafficBuckets
+    };
   }, [nowMs, usage]);
 
   const buildSparkline = useCallback(
@@ -155,11 +213,33 @@ export function useSparklines({ usage, loading, nowMs }: UseSparklinesOptions): 
     [buildSparkline, lastHourSeries.labels, lastHourSeries.tokens]
   );
 
+  const chunksSparkline = useMemo(
+    () =>
+      buildSparkline(
+        { labels: lastHourSeries.labels, data: lastHourSeries.chunks },
+        '#0ea5e9',
+        'rgba(14, 165, 233, 0.18)'
+      ),
+    [buildSparkline, lastHourSeries.chunks, lastHourSeries.labels]
+  );
+
+  const trafficSparkline = useMemo(
+    () =>
+      buildSparkline(
+        { labels: lastHourSeries.labels, data: lastHourSeries.traffic },
+        '#14b8a6',
+        'rgba(20, 184, 166, 0.18)'
+      ),
+    [buildSparkline, lastHourSeries.labels, lastHourSeries.traffic]
+  );
+
   return {
     requestsSparkline,
     tokensSparkline,
     rpmSparkline,
     tpmSparkline,
-    costSparkline
+    costSparkline,
+    chunksSparkline,
+    trafficSparkline
   };
 }
