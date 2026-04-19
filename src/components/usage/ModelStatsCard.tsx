@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import {
   LATENCY_SOURCE_FIELD,
+  formatBytes,
   formatCompactNumber,
   formatDurationMs,
   formatUsd,
@@ -25,12 +26,31 @@ type SortKey =
   | 'cost'
   | 'successRate'
   | 'averageLatencyMs'
-  | 'totalLatencyMs';
+  | 'totalLatencyMs'
+  | 'averageChunkCount'
+  | 'averageResponseBytes'
+  | 'averageAPIResponseBytes';
 type SortDir = 'asc' | 'desc';
 
 interface ModelStatWithRate extends ModelStat {
   successRate: number;
 }
+
+const formatAverageCount = (value: number | null): string => {
+  if (value === null || !Number.isFinite(value)) {
+    return '--';
+  }
+  if (value >= 1000) {
+    return formatCompactNumber(value);
+  }
+  if (value >= 100) {
+    return value.toFixed(0);
+  }
+  if (value >= 10) {
+    return value.toFixed(1);
+  }
+  return value.toFixed(2);
+};
 
 export function ModelStatsCard({ modelStats, loading, hasPrices }: ModelStatsCardProps) {
   const { t } = useTranslation();
@@ -75,6 +95,12 @@ export function ModelStatsCard({ modelStats, loading, hasPrices }: ModelStatsCar
   const ariaSort = (key: SortKey): 'none' | 'ascending' | 'descending' =>
     sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
   const hasLatencyData = sorted.some((stat) => stat.latencySampleCount > 0);
+  const hasRequestMetricData = sorted.some(
+    (stat) =>
+      stat.averageChunkCount !== null ||
+      stat.averageResponseBytes !== null ||
+      stat.averageAPIResponseBytes !== null
+  );
 
   return (
     <Card title={t('usage_stats.models')} className={styles.detailsFixedCard}>
@@ -140,6 +166,40 @@ export function ModelStatsCard({ modelStats, loading, hasPrices }: ModelStatsCar
                         {arrow('totalLatencyMs')}
                       </button>
                     </th>
+                    {hasRequestMetricData && (
+                      <>
+                        <th className={styles.sortableHeader} aria-sort={ariaSort('averageChunkCount')}>
+                          <button
+                            type="button"
+                            className={styles.sortHeaderButton}
+                            onClick={() => handleSort('averageChunkCount')}
+                          >
+                            {t('usage_stats.avg_chunk_per_request')}
+                            {arrow('averageChunkCount')}
+                          </button>
+                        </th>
+                        <th className={styles.sortableHeader} aria-sort={ariaSort('averageResponseBytes')}>
+                          <button
+                            type="button"
+                            className={styles.sortHeaderButton}
+                            onClick={() => handleSort('averageResponseBytes')}
+                          >
+                            {t('usage_stats.avg_response_bytes')}
+                            {arrow('averageResponseBytes')}
+                          </button>
+                        </th>
+                        <th className={styles.sortableHeader} aria-sort={ariaSort('averageAPIResponseBytes')}>
+                          <button
+                            type="button"
+                            className={styles.sortHeaderButton}
+                            onClick={() => handleSort('averageAPIResponseBytes')}
+                          >
+                            {t('usage_stats.avg_api_response_bytes')}
+                            {arrow('averageAPIResponseBytes')}
+                          </button>
+                        </th>
+                      </>
+                    )}
                     <th className={styles.sortableHeader} aria-sort={ariaSort('successRate')}>
                       <button
                         type="button"
@@ -190,6 +250,21 @@ export function ModelStatsCard({ modelStats, loading, hasPrices }: ModelStatsCar
                       <td className={styles.durationCell}>
                         {formatDurationMs(stat.totalLatencyMs)}
                       </td>
+                      {hasRequestMetricData && (
+                        <>
+                          <td>{formatAverageCount(stat.averageChunkCount)}</td>
+                          <td>
+                            {stat.averageResponseBytes !== null
+                              ? formatBytes(stat.averageResponseBytes)
+                              : '--'}
+                          </td>
+                          <td>
+                            {stat.averageAPIResponseBytes !== null
+                              ? formatBytes(stat.averageAPIResponseBytes)
+                              : '--'}
+                          </td>
+                        </>
+                      )}
                       <td>
                         <span
                           className={

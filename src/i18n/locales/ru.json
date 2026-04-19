@@ -1059,8 +1059,13 @@
     "request_events_count": "{{count}} событий",
     "request_events_limit_hint": "Показано {{shown}} из {{total}} событий для стабильной производительности.",
     "chunk_count": "Количество chunk",
+    "total_chunk_count": "Всего chunk",
+    "avg_chunk_per_request": "Среднее chunk на запрос",
+    "traffic_stats": "Трафик",
     "response_bytes": "Байты ответа",
     "api_response_bytes": "Байты upstream-ответа",
+    "avg_response_bytes": "Средний downstream-трафик",
+    "avg_api_response_bytes": "Средний upstream-трафик",
     "input_tokens": "Входные токены",
     "output_tokens": "Выходные токены",
     "last_updated": "Обновлено"

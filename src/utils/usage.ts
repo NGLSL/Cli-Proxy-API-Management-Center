@@ -104,6 +104,9 @@ export interface ModelStatsSummary {
   averageLatencyMs: number | null;
   totalLatencyMs: number | null;
   latencySampleCount: number;
+  averageChunkCount: number | null;
+  averageResponseBytes: number | null;
+  averageAPIResponseBytes: number | null;
 }
 
 export type UsageTimeRange = '7h' | '24h' | '7d' | 'all';
@@ -499,6 +502,25 @@ export function formatUsd(value: number): string {
     maximumFractionDigits: 2,
   });
   return `$${parts}`;
+}
+
+/**
+ * 格式化字节大小
+ */
+export function formatBytes(value: number): string {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) {
+    return '0 B';
+  }
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = num;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  const digits = size >= 100 || unitIndex === 0 ? 0 : size >= 10 ? 1 : 2;
+  return `${size.toFixed(digits)} ${units[unitIndex]}`;
 }
 
 const usageDetailsCache = new WeakMap<object, UsageDetail[]>();
@@ -1020,6 +1042,10 @@ export function getModelStats(
       tokens: number;
       cost: number;
       latency: LatencyAccumulator;
+      chunkCount: number;
+      responseBytes: number;
+      apiResponseBytes: number;
+      metricSampleCount: number;
     }
   >();
 
@@ -1038,6 +1064,10 @@ export function getModelStats(
         tokens: 0,
         cost: 0,
         latency: createLatencyAccumulator(),
+        chunkCount: 0,
+        responseBytes: 0,
+        apiResponseBytes: 0,
+        metricSampleCount: 0,
       };
       existing.requests += Number(modelData.total_requests) || 0;
       existing.tokens += Number(modelData.total_tokens) || 0;
@@ -1067,6 +1097,22 @@ export function getModelStats(
 
           addLatencySample(existing.latency, latencyMs);
 
+          if (detailRecord) {
+            const chunkCount = extractUsageMetricValue(detailRecord.chunk_count);
+            const responseBytes = extractUsageMetricValue(detailRecord.response_bytes);
+            const apiResponseBytes = extractUsageMetricValue(detailRecord.api_response_bytes);
+            if (
+              chunkCount !== undefined ||
+              responseBytes !== undefined ||
+              apiResponseBytes !== undefined
+            ) {
+              existing.metricSampleCount += 1;
+              existing.chunkCount += chunkCount ?? 0;
+              existing.responseBytes += responseBytes ?? 0;
+              existing.apiResponseBytes += apiResponseBytes ?? 0;
+            }
+          }
+
           if (price && detailRecord) {
             existing.cost += calculateCost(
               { ...(detailRecord as unknown as UsageDetail), __modelName: modelName },
@@ -1082,6 +1128,7 @@ export function getModelStats(
   return Array.from(modelMap.entries())
     .map(([model, stats]) => {
       const latencyStats = finalizeLatencyStats(stats.latency);
+      const metricDenominator = stats.metricSampleCount > 0 ? stats.metricSampleCount : 0;
       return {
         model,
         requests: stats.requests,
@@ -1092,6 +1139,12 @@ export function getModelStats(
         averageLatencyMs: latencyStats.averageMs,
         totalLatencyMs: latencyStats.totalMs,
         latencySampleCount: latencyStats.sampleCount,
+        averageChunkCount:
+          metricDenominator > 0 ? stats.chunkCount / metricDenominator : null,
+        averageResponseBytes:
+          metricDenominator > 0 ? stats.responseBytes / metricDenominator : null,
+        averageAPIResponseBytes:
+          metricDenominator > 0 ? stats.apiResponseBytes / metricDenominator : null,
       };
     })
     .sort((a, b) => b.requests - a.requests);

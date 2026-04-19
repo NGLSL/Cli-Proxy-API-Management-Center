@@ -1062,8 +1062,13 @@
     "request_events_count": "{{count}} events",
     "request_events_limit_hint": "Showing {{shown}} of {{total}} events to keep rendering responsive.",
     "chunk_count": "Chunk Count",
+    "total_chunk_count": "Total Chunks",
+    "avg_chunk_per_request": "Avg Chunks / Request",
+    "traffic_stats": "Traffic",
     "response_bytes": "Response Bytes",
     "api_response_bytes": "Upstream Response Bytes",
+    "avg_response_bytes": "Avg Downstream Traffic",
+    "avg_api_response_bytes": "Avg Upstream Traffic",
     "input_tokens": "Input Tokens",
     "output_tokens": "Output Tokens",
     "last_updated": "Updated"

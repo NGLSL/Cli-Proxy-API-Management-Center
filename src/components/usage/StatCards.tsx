@@ -7,11 +7,14 @@ import {
   IconSatellite,
   IconTimer,
   IconTrendingUp,
+  IconChartLine,
+  IconDownload,
 } from '@/components/ui/icons';
 import {
   LATENCY_SOURCE_FIELD,
   calculateLatencyStatsFromDetails,
   calculateCost,
+  formatBytes,
   formatCompactNumber,
   formatDurationMs,
   formatPerMinuteValue,
@@ -60,7 +63,7 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
 
   const hasPrices = Object.keys(modelPrices).length > 0;
 
-  const { tokenBreakdown, rateStats, totalCost, latencyStats } = useMemo(() => {
+  const { tokenBreakdown, rateStats, totalCost, latencyStats, requestMetrics } = useMemo(() => {
     const empty = {
       tokenBreakdown: { cachedTokens: 0, reasoningTokens: 0 },
       rateStats: { rpm: 0, tpm: 0, windowMinutes: 30, requestCount: 0, tokenCount: 0 },
@@ -69,6 +72,11 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
         averageMs: null as number | null,
         totalMs: null as number | null,
         sampleCount: 0,
+      },
+      requestMetrics: {
+        chunkCount: 0,
+        responseBytes: 0,
+        apiResponseBytes: 0,
       },
     };
 
@@ -81,6 +89,9 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
     let cachedTokens = 0;
     let reasoningTokens = 0;
     let totalCost = 0;
+    let chunkCount = 0;
+    let responseBytes = 0;
+    let apiResponseBytes = 0;
 
     const now = nowMs;
     const windowMinutes = 30;
@@ -98,6 +109,18 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       if (typeof tokens.reasoning_tokens === 'number') {
         reasoningTokens += tokens.reasoning_tokens;
       }
+      chunkCount +=
+        typeof detail.chunk_count === 'number' && Number.isFinite(detail.chunk_count)
+          ? Math.max(detail.chunk_count, 0)
+          : 0;
+      responseBytes +=
+        typeof detail.response_bytes === 'number' && Number.isFinite(detail.response_bytes)
+          ? Math.max(detail.response_bytes, 0)
+          : 0;
+      apiResponseBytes +=
+        typeof detail.api_response_bytes === 'number' && Number.isFinite(detail.api_response_bytes)
+          ? Math.max(detail.api_response_bytes, 0)
+          : 0;
 
       const timestamp = detail.__timestampMs ?? 0;
       if (
@@ -127,6 +150,11 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       },
       totalCost,
       latencyStats,
+      requestMetrics: {
+        chunkCount,
+        responseBytes,
+        apiResponseBytes,
+      },
     };
   }, [hasPrices, modelPrices, nowMs, usage]);
 
@@ -151,13 +179,57 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
           </span>
           {latencyStats.sampleCount > 0 && (
             <span className={styles.statMetaItem} title={latencyHint}>
-              {t('usage_stats.avg_time')}:{' '}
-              {loading ? '-' : formatDurationMs(latencyStats.averageMs)}
+              {t('usage_stats.avg_time')}: {loading ? '-' : formatDurationMs(latencyStats.averageMs)}
             </span>
           )}
         </>
       ),
       trend: sparklines.requests,
+    },
+    {
+      key: 'chunks',
+      label: t('usage_stats.total_chunk_count'),
+      icon: <IconChartLine size={16} />,
+      accent: '#0ea5e9',
+      accentSoft: 'rgba(14, 165, 233, 0.18)',
+      accentBorder: 'rgba(14, 165, 233, 0.32)',
+      value: loading ? '-' : formatCompactNumber(requestMetrics.chunkCount),
+      meta: (
+        <>
+          <span className={styles.statMetaItem}>
+            {t('usage_stats.total_requests')}: {loading ? '-' : (usage?.total_requests ?? 0).toLocaleString()}
+          </span>
+          <span className={styles.statMetaItem}>
+            {t('usage_stats.avg_chunk_per_request')}:{' '}
+            {loading
+              ? '-'
+              : (usage?.total_requests ?? 0) > 0
+                ? (requestMetrics.chunkCount / Math.max(usage?.total_requests ?? 0, 1)).toFixed(1)
+                : '0.0'}
+          </span>
+        </>
+      ),
+      trend: null,
+    },
+    {
+      key: 'traffic',
+      label: t('usage_stats.traffic_stats'),
+      icon: <IconDownload size={16} />,
+      accent: '#14b8a6',
+      accentSoft: 'rgba(20, 184, 166, 0.18)',
+      accentBorder: 'rgba(20, 184, 166, 0.32)',
+      value: loading ? '-' : formatBytes(requestMetrics.responseBytes + requestMetrics.apiResponseBytes),
+      meta: (
+        <>
+          <span className={styles.statMetaItem}>
+            {t('usage_stats.response_bytes')}: {loading ? '-' : formatBytes(requestMetrics.responseBytes)}
+          </span>
+          <span className={styles.statMetaItem}>
+            {t('usage_stats.api_response_bytes')}: {loading ? '-' : formatBytes(requestMetrics.apiResponseBytes)}
+          </span>
+        </>
+      ),
+      trend: null,
     },
     {
       key: 'tokens',
@@ -170,12 +242,10 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       meta: (
         <>
           <span className={styles.statMetaItem}>
-            {t('usage_stats.cached_tokens')}:{' '}
-            {loading ? '-' : formatCompactNumber(tokenBreakdown.cachedTokens)}
+            {t('usage_stats.cached_tokens')}: {loading ? '-' : formatCompactNumber(tokenBreakdown.cachedTokens)}
           </span>
           <span className={styles.statMetaItem}>
-            {t('usage_stats.reasoning_tokens')}:{' '}
-            {loading ? '-' : formatCompactNumber(tokenBreakdown.reasoningTokens)}
+            {t('usage_stats.reasoning_tokens')}: {loading ? '-' : formatCompactNumber(tokenBreakdown.reasoningTokens)}
           </span>
         </>
       ),
@@ -191,8 +261,7 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       value: loading ? '-' : formatPerMinuteValue(rateStats.rpm),
       meta: (
         <span className={styles.statMetaItem}>
-          {t('usage_stats.total_requests')}:{' '}
-          {loading ? '-' : rateStats.requestCount.toLocaleString()}
+          {t('usage_stats.total_requests')}: {loading ? '-' : rateStats.requestCount.toLocaleString()}
         </span>
       ),
       trend: sparklines.rpm,
@@ -207,8 +276,7 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       value: loading ? '-' : formatPerMinuteValue(rateStats.tpm),
       meta: (
         <span className={styles.statMetaItem}>
-          {t('usage_stats.total_tokens')}:{' '}
-          {loading ? '-' : formatCompactNumber(rateStats.tokenCount)}
+          {t('usage_stats.total_tokens')}: {loading ? '-' : formatCompactNumber(rateStats.tokenCount)}
         </span>
       ),
       trend: sparklines.tpm,
@@ -224,8 +292,7 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       meta: (
         <>
           <span className={styles.statMetaItem}>
-            {t('usage_stats.total_tokens')}:{' '}
-            {loading ? '-' : formatCompactNumber(usage?.total_tokens ?? 0)}
+            {t('usage_stats.total_tokens')}: {loading ? '-' : formatCompactNumber(usage?.total_tokens ?? 0)}
           </span>
           {!hasPrices && (
             <span className={`${styles.statMetaItem} ${styles.statSubtle}`}>

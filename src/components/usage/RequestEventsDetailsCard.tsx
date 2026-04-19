@@ -524,9 +524,6 @@ export function RequestEventsDetailsCard({
                     <th title={latencyHint}>{t('usage_stats.first_byte_latency')}</th>
                   )}
                   {hasLatencyData && <th title={latencyHint}>{t('usage_stats.time')}</th>}
-                  <th>{t('usage_stats.chunk_count')}</th>
-                  <th>{t('usage_stats.response_bytes')}</th>
-                  <th>{t('usage_stats.api_response_bytes')}</th>
                   <th>{t('usage_stats.input_tokens')}</th>
                   <th>{t('usage_stats.output_tokens')}</th>
                   <th>{t('usage_stats.reasoning_tokens')}</th>
@@ -570,9 +567,6 @@ export function RequestEventsDetailsCard({
                     {hasLatencyData && (
                       <td className={styles.durationCell}>{formatDurationMs(row.latencyMs)}</td>
                     )}
-                    <td>{row.chunkCount !== null ? row.chunkCount.toLocaleString() : '--'}</td>
-                    <td>{row.responseBytes !== null ? row.responseBytes.toLocaleString() : '--'}</td>
-                    <td>{row.apiResponseBytes !== null ? row.apiResponseBytes.toLocaleString() : '--'}</td>
                     <td>{row.inputTokens.toLocaleString()}</td>
                     <td>{row.outputTokens.toLocaleString()}</td>
                     <td>{row.reasoningTokens.toLocaleString()}</td>
