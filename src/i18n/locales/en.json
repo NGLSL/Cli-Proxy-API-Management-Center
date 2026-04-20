@@ -1298,6 +1298,8 @@
         "quota": {
           "title": "Quota Fallback",
           "description": "Fallback strategy when quota is exceeded",
+          "refresh_interval": "Quota Cache Refresh Interval (seconds)",
+          "refresh_interval_hint": "Set the quota cache refresh interval in seconds; leave empty to let the server use the default value of 3600 seconds.",
           "switch_project": "Switch Project",
           "switch_project_desc": "Automatically switch to another project when quota is exceeded",
           "switch_preview_model": "Switch to Preview Model",

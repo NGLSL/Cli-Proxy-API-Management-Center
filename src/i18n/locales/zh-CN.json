@@ -1298,6 +1298,8 @@
         "quota": {
           "title": "配额回退",
           "description": "配额耗尽时的回退策略",
+          "refresh_interval": "配额缓存刷新间隔（秒）",
+          "refresh_interval_hint": "设置配额缓存的刷新间隔，单位为秒；留空时由服务端使用默认值 3600 秒。",
           "switch_project": "切换项目",
           "switch_project_desc": "配额耗尽时自动切换到其他项目",
           "switch_preview_model": "切换预览模型",

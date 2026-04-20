@@ -13,6 +13,7 @@ export type VisualConfigFieldPath =
   | 'forwardRequestHeaders'
   | 'maxRetryCredentials'
   | 'maxRetryInterval'
+  | 'quotaCacheRefreshInterval'
   | 'routingStickyTTL'
   | 'streaming.keepaliveSeconds'
   | 'streaming.bootstrapRetries'
@@ -81,6 +82,7 @@ export type VisualConfigValues = {
   forwardRequestHeaders: HeaderEntry[];
   maxRetryCredentials: string;
   maxRetryInterval: string;
+  quotaCacheRefreshInterval: string;
   routingStickyTTL: string;
   quotaSwitchProject: boolean;
   quotaSwitchPreviewModel: boolean;
@@ -123,6 +125,7 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
   forwardRequestHeaders: [],
   maxRetryCredentials: '',
   maxRetryInterval: '',
+  quotaCacheRefreshInterval: '',
   routingStickyTTL: '',
   quotaSwitchProject: true,
   quotaSwitchPreviewModel: true,

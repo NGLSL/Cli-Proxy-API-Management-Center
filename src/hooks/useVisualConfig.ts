@@ -184,6 +184,7 @@ export function getVisualConfigValidationErrors(
     forwardRequestHeaders: getDuplicateHeaderKeyError(values.forwardRequestHeaders),
     maxRetryCredentials: getNonNegativeIntegerError(values.maxRetryCredentials),
     maxRetryInterval: getNonNegativeIntegerError(values.maxRetryInterval),
+    quotaCacheRefreshInterval: getNonNegativeIntegerError(values.quotaCacheRefreshInterval),
     routingStickyTTL:
       values.routingStrategy === 'sticky-round-robin'
         ? getNonNegativeIntegerError(values.routingStickyTTL)
@@ -715,6 +716,12 @@ function getNextDirtyFields(
       nextValues.maxRetryInterval === baselineValues.maxRetryInterval
     );
   }
+  if (Object.prototype.hasOwnProperty.call(patch, 'quotaCacheRefreshInterval')) {
+    updateDirty(
+      'quotaCacheRefreshInterval',
+      nextValues.quotaCacheRefreshInterval === baselineValues.quotaCacheRefreshInterval
+    );
+  }
   if (Object.prototype.hasOwnProperty.call(patch, 'wsAuth')) {
     updateDirty('wsAuth', nextValues.wsAuth === baselineValues.wsAuth);
   }
@@ -916,6 +923,7 @@ export function useVisualConfig() {
         forwardRequestHeaders: parseHeaderEntries(parsed['forward-request-headers']),
         maxRetryCredentials: String(parsed['max-retry-credentials'] ?? ''),
         maxRetryInterval: String(parsed['max-retry-interval'] ?? ''),
+        quotaCacheRefreshInterval: String(parsed['quota-cache-refresh-interval'] ?? ''),
         routingStickyTTL: String(routing?.['sticky-ttl'] ?? ''),
         wsAuth: Boolean(parsed['ws-auth']),
 
@@ -1024,6 +1032,11 @@ export function useVisualConfig() {
         setIntFromStringInDoc(doc, ['request-retry'], values.requestRetry);
         setIntFromStringInDoc(doc, ['max-retry-credentials'], values.maxRetryCredentials);
         setIntFromStringInDoc(doc, ['max-retry-interval'], values.maxRetryInterval);
+        setIntFromStringInDoc(
+          doc,
+          ['quota-cache-refresh-interval'],
+          values.quotaCacheRefreshInterval
+        );
         setForwardRequestHeadersInDoc(doc, values.forwardRequestHeaders);
         setBooleanInDoc(doc, ['ws-auth'], values.wsAuth);
 

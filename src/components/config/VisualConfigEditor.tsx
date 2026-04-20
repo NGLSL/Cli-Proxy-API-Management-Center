@@ -187,6 +187,9 @@ export function VisualConfigEditor({
   const routingStrategyLabelId = useId();
   const routingStrategyHintId = `${routingStrategyLabelId}-hint`;
   const stickyTTLInputId = useId();
+  const quotaRefreshIntervalInputId = useId();
+  const quotaRefreshIntervalHintId = `${quotaRefreshIntervalInputId}-hint`;
+  const quotaRefreshIntervalErrorId = `${quotaRefreshIntervalInputId}-error`;
   const keepaliveInputId = useId();
   const keepaliveHintId = `${keepaliveInputId}-hint`;
   const keepaliveErrorId = `${keepaliveInputId}-error`;
@@ -220,6 +223,10 @@ export function VisualConfigEditor({
   );
   const maxRetryCredentialsError = getValidationMessage(t, validationErrors?.maxRetryCredentials);
   const maxRetryIntervalError = getValidationMessage(t, validationErrors?.maxRetryInterval);
+  const quotaCacheRefreshIntervalError = getValidationMessage(
+    t,
+    validationErrors?.quotaCacheRefreshInterval
+  );
   const routingStickyTTLError = getValidationMessage(t, validationErrors?.routingStickyTTL);
   const keepaliveError = getValidationMessage(t, validationErrors?.['streaming.keepaliveSeconds']);
   const bootstrapRetriesError = getValidationMessage(
@@ -317,7 +324,7 @@ export function VisualConfigEditor({
         title: t('config_management.visual.sections.quota.title'),
         description: t('config_management.visual.sections.quota.description'),
         icon: IconTimer,
-        errorCount: 0,
+        errorCount: countErrors(['quotaCacheRefreshInterval']),
       },
       {
         id: 'streaming',
@@ -982,31 +989,60 @@ export function VisualConfigEditor({
             title={t('config_management.visual.sections.quota.title')}
             description={t('config_management.visual.sections.quota.description')}
           >
-            <SectionGrid>
-              <ToggleRow
-                title={t('config_management.visual.sections.quota.switch_project')}
-                description={t('config_management.visual.sections.quota.switch_project_desc')}
-                checked={values.quotaSwitchProject}
-                disabled={disabled}
-                onChange={(quotaSwitchProject) => onChange({ quotaSwitchProject })}
-              />
-              <ToggleRow
-                title={t('config_management.visual.sections.quota.switch_preview_model')}
-                description={t('config_management.visual.sections.quota.switch_preview_model_desc')}
-                checked={values.quotaSwitchPreviewModel}
-                disabled={disabled}
-                onChange={(quotaSwitchPreviewModel) => onChange({ quotaSwitchPreviewModel })}
-              />
-              <ToggleRow
-                title={t('config_management.visual.sections.quota.antigravity_credits')}
-                description={t(
-                  'config_management.visual.sections.quota.antigravity_credits_desc'
-                )}
-                checked={values.quotaAntigravityCredits}
-                disabled={disabled}
-                onChange={(quotaAntigravityCredits) => onChange({ quotaAntigravityCredits })}
-              />
-            </SectionGrid>
+            <SectionStack>
+              <SectionGrid>
+                <FieldShell
+                  label={t('config_management.visual.sections.quota.refresh_interval')}
+                  htmlFor={quotaRefreshIntervalInputId}
+                  hint={t('config_management.visual.sections.quota.refresh_interval_hint')}
+                  hintId={quotaRefreshIntervalHintId}
+                  error={quotaCacheRefreshIntervalError}
+                  errorId={quotaRefreshIntervalErrorId}
+                >
+                  <input
+                    id={quotaRefreshIntervalInputId}
+                    className="input"
+                    type="number"
+                    placeholder="3600"
+                    value={values.quotaCacheRefreshInterval}
+                    onChange={(e) => onChange({ quotaCacheRefreshInterval: e.target.value })}
+                    disabled={disabled}
+                    aria-describedby={
+                      quotaCacheRefreshIntervalError
+                        ? `${quotaRefreshIntervalErrorId} ${quotaRefreshIntervalHintId}`
+                        : quotaRefreshIntervalHintId
+                    }
+                    aria-invalid={quotaCacheRefreshIntervalError ? true : undefined}
+                  />
+                </FieldShell>
+              </SectionGrid>
+
+              <SectionGrid>
+                <ToggleRow
+                  title={t('config_management.visual.sections.quota.switch_project')}
+                  description={t('config_management.visual.sections.quota.switch_project_desc')}
+                  checked={values.quotaSwitchProject}
+                  disabled={disabled}
+                  onChange={(quotaSwitchProject) => onChange({ quotaSwitchProject })}
+                />
+                <ToggleRow
+                  title={t('config_management.visual.sections.quota.switch_preview_model')}
+                  description={t('config_management.visual.sections.quota.switch_preview_model_desc')}
+                  checked={values.quotaSwitchPreviewModel}
+                  disabled={disabled}
+                  onChange={(quotaSwitchPreviewModel) => onChange({ quotaSwitchPreviewModel })}
+                />
+                <ToggleRow
+                  title={t('config_management.visual.sections.quota.antigravity_credits')}
+                  description={t(
+                    'config_management.visual.sections.quota.antigravity_credits_desc'
+                  )}
+                  checked={values.quotaAntigravityCredits}
+                  disabled={disabled}
+                  onChange={(quotaAntigravityCredits) => onChange({ quotaAntigravityCredits })}
+                />
+              </SectionGrid>
+            </SectionStack>
           </ConfigSection>
 
           <ConfigSection
