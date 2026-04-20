@@ -184,13 +184,58 @@ export interface ClaudeQuotaWindow {
   resetLabel: string;
 }
 
-export interface ClaudeQuotaState {
-  status: 'idle' | 'loading' | 'success' | 'error';
+export type QuotaCardStatus = 'idle' | 'loading' | 'success' | 'error';
+
+export type QuotaCacheStatus =
+  | 'fresh'
+  | 'refreshing'
+  | 'rate_limited'
+  | 'unauthorized'
+  | 'error'
+  | 'pending';
+
+export interface QuotaCacheEntry {
+  name: string;
+  provider: string;
+  auth_index: string;
+  disabled: boolean;
+  status: QuotaCacheStatus;
+  last_refresh_at?: string | null;
+  last_error?: string;
+  last_error_status?: number;
+  quota_recover_at?: string | null;
+  payload?: unknown;
+}
+
+export interface QuotaCacheSnapshot {
+  version: number;
+  updated_at: string;
+  entries: QuotaCacheEntry[];
+}
+
+export interface QuotaCacheRefreshRequest {
+  auth_indexes?: string[];
+  force: boolean;
+}
+
+export interface QuotaCacheRefreshResponse {
+  updated_at: string;
+  entries: QuotaCacheEntry[];
+}
+
+export interface QuotaStateBase {
+  status: QuotaCardStatus;
+  error?: string;
+  errorStatus?: number;
+  cacheStatus?: QuotaCacheStatus;
+  lastRefreshAt?: string;
+  quotaRecoverAt?: string;
+}
+
+export interface ClaudeQuotaState extends QuotaStateBase {
   windows: ClaudeQuotaWindow[];
   extraUsage?: ClaudeExtraUsage | null;
   planType?: string | null;
-  error?: string;
-  errorStatus?: number;
 }
 
 // Quota state types
@@ -202,11 +247,8 @@ export interface AntigravityQuotaGroup {
   resetTime?: string;
 }
 
-export interface AntigravityQuotaState {
-  status: 'idle' | 'loading' | 'success' | 'error';
+export interface AntigravityQuotaState extends QuotaStateBase {
   groups: AntigravityQuotaGroup[];
-  error?: string;
-  errorStatus?: number;
 }
 
 export interface GeminiCliQuotaBucketState {
@@ -219,14 +261,11 @@ export interface GeminiCliQuotaBucketState {
   modelIds?: string[];
 }
 
-export interface GeminiCliQuotaState {
-  status: 'idle' | 'loading' | 'success' | 'error';
+export interface GeminiCliQuotaState extends QuotaStateBase {
   buckets: GeminiCliQuotaBucketState[];
   tierLabel?: string | null;
   tierId?: string | null;
   creditBalance?: number | null;
-  error?: string;
-  errorStatus?: number;
 }
 
 export interface CodexQuotaWindow {
@@ -238,12 +277,9 @@ export interface CodexQuotaWindow {
   resetLabel: string;
 }
 
-export interface CodexQuotaState {
-  status: 'idle' | 'loading' | 'success' | 'error';
+export interface CodexQuotaState extends QuotaStateBase {
   windows: CodexQuotaWindow[];
   planType?: string | null;
-  error?: string;
-  errorStatus?: number;
 }
 
 // Kimi API payload types
@@ -300,9 +336,6 @@ export interface KimiQuotaRow {
   resetHint?: string;
 }
 
-export interface KimiQuotaState {
-  status: 'idle' | 'loading' | 'success' | 'error';
+export interface KimiQuotaState extends QuotaStateBase {
   rows: KimiQuotaRow[];
-  error?: string;
-  errorStatus?: number;
 }

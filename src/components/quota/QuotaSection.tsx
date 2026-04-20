@@ -1,16 +1,14 @@
 /**
- * Generic quota section component.
+ * 通用 quota 分区组件。
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { triggerHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useNotificationStore, useQuotaStore, useThemeStore } from '@/stores';
 import type { AuthFileItem, ResolvedTheme } from '@/types';
-import { getStatusFromError } from '@/utils/quota';
 import { QuotaCard } from './QuotaCard';
 import type { QuotaStatusState } from './QuotaCard';
 import { useQuotaLoader } from './useQuotaLoader';
@@ -111,8 +109,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     Record<string, TState>
   >;
 
-  /* Removed useRef */
-  const [columns, gridRef] = useGridColumns(380); // Min card width 380px matches SCSS
+  const [columns, gridRef] = useGridColumns(380);
   const [viewMode, setViewMode] = useState<ViewMode>('paged');
   const [showTooManyWarning, setShowTooManyWarning] = useState(false);
 
@@ -151,40 +148,25 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     };
   }, [showAllAllowed, viewMode]);
 
-  // Update page size based on view mode and columns
   useEffect(() => {
     if (effectiveViewMode === 'all') {
       setPageSize(Math.max(1, filteredFiles.length));
     } else {
-      // Paged mode: 3 rows * columns, capped to avoid oversized pages.
       setPageSize(Math.min(columns * 3, MAX_ITEMS_PER_PAGE));
     }
   }, [effectiveViewMode, columns, filteredFiles.length, setPageSize]);
 
   const { quota, loadQuota } = useQuotaLoader(config);
 
-  const pendingQuotaRefreshRef = useRef(false);
-  const prevFilesLoadingRef = useRef(loading);
-
-  const handleRefresh = useCallback(() => {
-    pendingQuotaRefreshRef.current = true;
-    void triggerHeaderRefresh();
-  }, []);
-
-  useEffect(() => {
-    const wasLoading = prevFilesLoadingRef.current;
-    prevFilesLoadingRef.current = loading;
-
-    if (!pendingQuotaRefreshRef.current) return;
-    if (loading) return;
-    if (!wasLoading) return;
-
-    pendingQuotaRefreshRef.current = false;
-    const scope = effectiveViewMode === 'all' ? 'all' : 'page';
-    const targets = effectiveViewMode === 'all' ? filteredFiles : pageItems;
-    if (targets.length === 0) return;
-    loadQuota(targets, scope, setLoading);
-  }, [loading, effectiveViewMode, filteredFiles, pageItems, loadQuota, setLoading]);
+  const refreshScope = effectiveViewMode === 'all' ? 'all' : 'page';
+  const refreshTargets = useMemo(
+    () => (refreshScope === 'all' ? filteredFiles : pageItems),
+    [filteredFiles, pageItems, refreshScope]
+  );
+  const refreshButtonLabel =
+    refreshScope === 'all'
+      ? t('quota_management.refresh_all_credentials')
+      : t('quota_management.refresh_current_page_credentials');
 
   useEffect(() => {
     if (loading) return;
@@ -204,37 +186,46 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     });
   }, [filteredFiles, loading, setQuota]);
 
+  const handleRefresh = useCallback(async () => {
+    if (disabled || refreshTargets.length === 0) return;
+
+    try {
+      await loadQuota(refreshTargets, refreshScope, setLoading);
+      showNotification(
+        t('quota_management.refresh_selection_success', { count: refreshTargets.length }),
+        'success'
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('common.unknown_error');
+      showNotification(t('quota_management.refresh_selection_failed', { message }), 'error');
+    }
+  }, [
+    disabled,
+    loadQuota,
+    refreshScope,
+    refreshTargets,
+    setLoading,
+    showNotification,
+    t
+  ]);
+
   const refreshQuotaForFile = useCallback(
     async (file: AuthFileItem) => {
       if (disabled || file.disabled) return;
       if (quota[file.name]?.status === 'loading') return;
 
-      setQuota((prev) => ({
-        ...prev,
-        [file.name]: config.buildLoadingState()
-      }));
-
       try {
-        const data = await config.fetchQuota(file, t);
-        setQuota((prev) => ({
-          ...prev,
-          [file.name]: config.buildSuccessState(data)
-        }));
+        await loadQuota([file], 'page', setLoading);
         showNotification(t('auth_files.quota_refresh_success', { name: file.name }), 'success');
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : t('common.unknown_error');
-        const status = getStatusFromError(err);
-        setQuota((prev) => ({
-          ...prev,
-          [file.name]: config.buildErrorState(message, status)
-        }));
         showNotification(
           t('auth_files.quota_refresh_failed', { name: file.name, message }),
           'error'
         );
       }
     },
-    [config, disabled, quota, setQuota, showNotification, t]
+    [disabled, loadQuota, quota, setLoading, showNotification, t]
   );
 
   const titleNode = (
@@ -287,14 +278,14 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
             variant="secondary"
             size="sm"
             className={styles.refreshAllButton}
-            onClick={handleRefresh}
-            disabled={disabled || isRefreshing}
+            onClick={() => void handleRefresh()}
+            disabled={disabled || isRefreshing || refreshTargets.length === 0}
             loading={isRefreshing}
-            title={t('quota_management.refresh_all_credentials')}
-            aria-label={t('quota_management.refresh_all_credentials')}
+            title={refreshButtonLabel}
+            aria-label={refreshButtonLabel}
           >
             {!isRefreshing && <IconRefreshCw size={16} />}
-            {t('quota_management.refresh_all_credentials')}
+            {refreshButtonLabel}
           </Button>
         </div>
       }

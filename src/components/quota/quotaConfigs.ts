@@ -28,6 +28,9 @@ import type {
   GeminiCliUserTier,
   KimiQuotaRow,
   KimiQuotaState,
+  QuotaCacheEntry,
+  QuotaCacheSnapshot,
+  QuotaStateBase,
 } from '@/types';
 import { apiCallApi, authFilesApi, getApiCallErrorMessage } from '@/services/api';
 import { useQuotaStore } from '@/stores';
@@ -117,12 +120,346 @@ export interface QuotaConfig<TState, TData> {
   buildLoadingState: () => TState;
   buildSuccessState: (data: TData) => TState;
   buildErrorState: (message: string, status?: number) => TState;
+  buildDataFromCachePayload: (payload: unknown, t: TFunction) => TData | null;
   cardClassName: string;
   controlsClassName: string;
   controlClassName: string;
   gridClassName: string;
   renderQuotaItems: (quota: TState, t: TFunction, helpers: QuotaRenderHelpers) => ReactNode;
 }
+
+type QuotaCacheStores = Pick<
+  QuotaStore,
+  'antigravityQuota' | 'claudeQuota' | 'codexQuota' | 'geminiCliQuota' | 'kimiQuota'
+>;
+
+const createEmptyQuotaCacheStores = (): QuotaCacheStores => ({
+  antigravityQuota: {},
+  claudeQuota: {},
+  codexQuota: {},
+  geminiCliQuota: {},
+  kimiQuota: {},
+});
+
+const parseQuotaCachePayloadObject = (payload: unknown): Record<string, unknown> | null => {
+  if (payload === null || payload === undefined) return null;
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim();
+    if (!trimmed) return null;
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+  return typeof payload === 'object' && !Array.isArray(payload)
+    ? (payload as Record<string, unknown>)
+    : null;
+};
+
+const buildQuotaStateBase = (
+  entry: QuotaCacheEntry
+): Pick<QuotaStateBase, 'cacheStatus' | 'lastRefreshAt' | 'quotaRecoverAt'> => ({
+  cacheStatus: entry.status,
+  lastRefreshAt: normalizeStringValue(entry.last_refresh_at) ?? undefined,
+  quotaRecoverAt: normalizeStringValue(entry.quota_recover_at) ?? undefined,
+});
+
+const mergeQuotaStateBase = <TState extends object>(
+  state: TState,
+  entry: QuotaCacheEntry
+): TState & Pick<QuotaStateBase, 'cacheStatus' | 'lastRefreshAt' | 'quotaRecoverAt'> => ({
+  ...state,
+  ...buildQuotaStateBase(entry),
+});
+
+const resolveQuotaCacheErrorMessage = (entry: QuotaCacheEntry, t: TFunction): string => {
+  const lastError = normalizeStringValue(entry.last_error);
+  if (lastError) return lastError;
+  if (entry.status === 'unauthorized') return t('common.quota_check_credential');
+  if (entry.status === 'rate_limited') return t('quota_management.cache_status_rate_limited');
+  if (entry.status === 'pending' || entry.status === 'refreshing') return t('common.loading');
+  return t('notification.refresh_failed');
+};
+
+const buildQuotaStateFromCacheEntry = <TState extends object, TData>(
+  config: QuotaConfig<TState, TData>,
+  entry: QuotaCacheEntry,
+  t: TFunction
+): TState => {
+  const payloadData = config.buildDataFromCachePayload(entry.payload, t);
+  if (payloadData !== null) {
+    return mergeQuotaStateBase(config.buildSuccessState(payloadData), entry);
+  }
+  if (entry.status === 'pending' || entry.status === 'refreshing') {
+    return mergeQuotaStateBase(config.buildLoadingState(), entry);
+  }
+  return mergeQuotaStateBase(
+    config.buildErrorState(resolveQuotaCacheErrorMessage(entry, t), entry.last_error_status),
+    entry
+  );
+};
+
+const buildQuotaCacheEntryIndex = (entries: QuotaCacheEntry[], provider: QuotaType) => {
+  const byName = new Map<string, QuotaCacheEntry>();
+  const byAuthIndex = new Map<string, QuotaCacheEntry>();
+
+  entries.forEach((entry) => {
+    if (entry.provider !== provider) return;
+    const name = normalizeStringValue(entry.name);
+    if (name) byName.set(name, entry);
+    const authIndex = normalizeAuthIndex(entry.auth_index);
+    if (authIndex) byAuthIndex.set(authIndex, entry);
+  });
+
+  return { byName, byAuthIndex };
+};
+
+export const buildQuotaStateMapFromEntries = <TState extends object, TData>(
+  config: QuotaConfig<TState, TData>,
+  files: AuthFileItem[],
+  entries: QuotaCacheEntry[],
+  t: TFunction
+): Record<string, TState> => {
+  const nextState: Record<string, TState> = {};
+  const entryIndex = buildQuotaCacheEntryIndex(entries, config.type);
+
+  files.forEach((file) => {
+    const authIndex = normalizeAuthIndex(file['auth_index'] ?? file.authIndex);
+    const entry = entryIndex.byName.get(file.name) ?? (authIndex ? entryIndex.byAuthIndex.get(authIndex) : undefined);
+    nextState[file.name] = entry
+      ? buildQuotaStateFromCacheEntry(config, entry, t)
+      : config.buildErrorState(t('notification.refresh_failed'));
+  });
+
+  return nextState;
+};
+
+export const buildQuotaStoresFromSnapshot = (
+  snapshot: QuotaCacheSnapshot,
+  t: TFunction
+): QuotaCacheStores => {
+  const stores = createEmptyQuotaCacheStores();
+  const entries = Array.isArray(snapshot.entries) ? snapshot.entries : [];
+
+  entries.forEach((entry) => {
+    if (!entry || typeof entry !== 'object') return;
+    switch (entry.provider) {
+      case 'antigravity':
+        stores.antigravityQuota[entry.name] = buildQuotaStateFromCacheEntry(ANTIGRAVITY_CONFIG, entry, t);
+        break;
+      case 'claude':
+        stores.claudeQuota[entry.name] = buildQuotaStateFromCacheEntry(CLAUDE_CONFIG, entry, t);
+        break;
+      case 'codex':
+        stores.codexQuota[entry.name] = buildQuotaStateFromCacheEntry(CODEX_CONFIG, entry, t);
+        break;
+      case 'gemini-cli':
+        stores.geminiCliQuota[entry.name] = buildQuotaStateFromCacheEntry(GEMINI_CLI_CONFIG, entry, t);
+        break;
+      case 'kimi':
+        stores.kimiQuota[entry.name] = buildQuotaStateFromCacheEntry(KIMI_CONFIG, entry, t);
+        break;
+      default:
+        break;
+    }
+  });
+
+  return stores;
+};
+
+const parseAntigravityGroupsFromCachePayload = (
+  payload: unknown
+): AntigravityQuotaGroup[] | null => {
+  const body = parseQuotaCachePayloadObject(payload);
+  if (!body) return null;
+  const rawGroups = body.groups;
+  if (!Array.isArray(rawGroups)) return [];
+
+  return rawGroups.reduce<AntigravityQuotaGroup[]>((result, item, index) => {
+    if (!item || typeof item !== 'object') return result;
+    const record = item as Record<string, unknown>;
+    const label = normalizeStringValue(record.label) ?? normalizeStringValue(record.displayName);
+    const models = Array.isArray(record.models)
+      ? record.models
+          .map((value) => normalizeStringValue(value))
+          .filter((value): value is string => Boolean(value))
+      : [];
+    const remainingFraction = normalizeQuotaFraction(record.remainingFraction ?? record.remaining_fraction);
+    if (!label || remainingFraction === null) return result;
+
+    result.push({
+      id: normalizeStringValue(record.id) ?? `group-${index}`,
+      label,
+      models,
+      remainingFraction,
+      resetTime: normalizeStringValue(record.resetTime ?? record.reset_time) ?? undefined,
+    });
+    return result;
+  }, []);
+};
+
+const normalizeClaudePlanTypeFromCache = (value: unknown): string | null => {
+  const normalized = normalizePlanType(value);
+  if (!normalized) return null;
+  if (normalized === 'max' || normalized === 'plan_max') return 'plan_max';
+  if (normalized === 'pro' || normalized === 'plan_pro') return 'plan_pro';
+  if (normalized === 'free' || normalized === 'plan_free') return 'plan_free';
+  return normalized.startsWith('plan_') ? normalized : null;
+};
+
+const parseClaudeDataFromCachePayload = (
+  payload: unknown,
+  t: TFunction
+): { windows: ClaudeQuotaWindow[]; extraUsage?: ClaudeExtraUsage | null; planType?: string | null } | null => {
+  const body = parseQuotaCachePayloadObject(payload);
+  if (!body) return null;
+
+  const windowsPayload = Array.isArray(body.windows) ? body.windows : [];
+  const windows = windowsPayload.reduce<ClaudeQuotaWindow[]>((result, item, index) => {
+    if (!item || typeof item !== 'object') return result;
+    const record = item as Record<string, unknown>;
+    const id = normalizeStringValue(record.id) ?? `window-${index}`;
+    const labelKey = normalizeStringValue(record.labelKey);
+    const fallbackLabel = normalizeStringValue(record.label) ?? id;
+    result.push({
+      id,
+      label: labelKey ? t(labelKey) : fallbackLabel,
+      labelKey: labelKey ?? undefined,
+      usedPercent: normalizeNumberValue(record.usedPercent ?? record.used_percent),
+      resetLabel:
+        normalizeStringValue(record.resetLabel ?? record.reset_label) ??
+        formatQuotaResetTime(normalizeStringValue(record.resets_at) ?? undefined),
+    });
+    return result;
+  }, []);
+
+  const extraUsagePayload = body.extraUsage;
+  const extraUsage =
+    extraUsagePayload && typeof extraUsagePayload === 'object'
+      ? (extraUsagePayload as ClaudeExtraUsage)
+      : null;
+
+  return {
+    windows,
+    extraUsage,
+    planType: normalizeClaudePlanTypeFromCache(body.planType ?? body.plan_type),
+  };
+};
+
+const parseCodexDataFromCachePayload = (
+  payload: unknown,
+  t: TFunction
+): { planType: string | null; windows: CodexQuotaWindow[] } | null => {
+  const body = parseQuotaCachePayloadObject(payload);
+  if (!body) return null;
+
+  const windowsPayload = Array.isArray(body.windows) ? body.windows : [];
+  const windows = windowsPayload.reduce<CodexQuotaWindow[]>((result, item, index) => {
+    if (!item || typeof item !== 'object') return result;
+    const record = item as Record<string, unknown>;
+    const id = normalizeStringValue(record.id) ?? `window-${index}`;
+    const labelKey = normalizeStringValue(record.labelKey);
+    const labelParams =
+      record.labelParams && typeof record.labelParams === 'object' && !Array.isArray(record.labelParams)
+        ? (record.labelParams as Record<string, string | number>)
+        : undefined;
+    const fallbackLabel = normalizeStringValue(record.label) ?? id;
+    result.push({
+      id,
+      label: labelKey ? t(labelKey, labelParams ?? {}) : fallbackLabel,
+      labelKey: labelKey ?? undefined,
+      labelParams,
+      usedPercent: normalizeNumberValue(record.usedPercent ?? record.used_percent),
+      resetLabel:
+        normalizeStringValue(record.resetLabel ?? record.reset_label) ??
+        formatCodexResetLabel(record as CodexUsageWindow),
+    });
+    return result;
+  }, []);
+
+  return {
+    windows,
+    planType: normalizePlanType(body.planType ?? body.plan_type),
+  };
+};
+
+const parseGeminiCliDataFromCachePayload = (
+  payload: unknown
+): {
+  fileName: string;
+  supplementaryRequestId: number;
+  buckets: GeminiCliQuotaBucketState[];
+  tierLabel: string | null;
+  tierId: string | null;
+  creditBalance: number | null;
+} | null => {
+  const body = parseQuotaCachePayloadObject(payload);
+  if (!body) return null;
+
+  const rawBuckets = Array.isArray(body.buckets) ? body.buckets : [];
+  const buckets = rawBuckets.reduce<GeminiCliQuotaBucketState[]>((result, item, index) => {
+    if (!item || typeof item !== 'object') return result;
+    const record = item as Record<string, unknown>;
+    const label = normalizeStringValue(record.label);
+    if (!label) return result;
+
+    const rawModelIds = record.modelIds ?? record.model_ids;
+    const modelIds = Array.isArray(rawModelIds)
+      ? rawModelIds
+          .map((value: unknown) => normalizeStringValue(value))
+          .filter((value): value is string => Boolean(value))
+      : undefined;
+
+    result.push({
+      id: normalizeStringValue(record.id) ?? `bucket-${index}`,
+      label,
+      remainingFraction: normalizeQuotaFraction(record.remainingFraction ?? record.remaining_fraction),
+      remainingAmount: normalizeNumberValue(record.remainingAmount ?? record.remaining_amount),
+      resetTime: normalizeStringValue(record.resetTime ?? record.reset_time) ?? undefined,
+      tokenType: normalizeStringValue(record.tokenType ?? record.token_type),
+      ...(modelIds && modelIds.length > 0 ? { modelIds } : {}),
+    });
+    return result;
+  }, []);
+
+  return {
+    fileName: '',
+    supplementaryRequestId: 0,
+    buckets,
+    tierLabel: normalizeStringValue(body.tierLabel ?? body.tier_label),
+    tierId: normalizeStringValue(body.tierId ?? body.tier_id),
+    creditBalance: normalizeNumberValue(body.creditBalance ?? body.credit_balance),
+  };
+};
+
+const parseKimiRowsFromCachePayload = (payload: unknown): KimiQuotaRow[] | null => {
+  const body = parseQuotaCachePayloadObject(payload);
+  if (!body) return null;
+  const rawRows = Array.isArray(body.rows) ? body.rows : [];
+
+  return rawRows.reduce<KimiQuotaRow[]>((result, item, index) => {
+    if (!item || typeof item !== 'object') return result;
+    const record = item as Record<string, unknown>;
+    const labelParams =
+      record.labelParams && typeof record.labelParams === 'object' && !Array.isArray(record.labelParams)
+        ? (record.labelParams as Record<string, string | number>)
+        : undefined;
+    result.push({
+      id: normalizeStringValue(record.id) ?? `row-${index}`,
+      label: normalizeStringValue(record.label) ?? undefined,
+      labelKey: normalizeStringValue(record.labelKey) ?? undefined,
+      labelParams,
+      used: normalizeNumberValue(record.used) ?? 0,
+      limit: normalizeNumberValue(record.limit) ?? 0,
+      resetHint: normalizeStringValue(record.resetHint ?? record.reset_hint) ?? undefined,
+    });
+    return result;
+  }, []);
+};
 
 const resolveAntigravityProjectId = async (file: AuthFileItem): Promise<string> => {
   try {
@@ -1132,6 +1469,7 @@ export const CLAUDE_CONFIG: QuotaConfig<
     error: message,
     errorStatus: status,
   }),
+  buildDataFromCachePayload: (payload, t) => parseClaudeDataFromCachePayload(payload, t),
   cardClassName: styles.claudeCard,
   controlsClassName: styles.claudeControls,
   controlClassName: styles.claudeControl,
@@ -1155,6 +1493,7 @@ export const ANTIGRAVITY_CONFIG: QuotaConfig<AntigravityQuotaState, AntigravityQ
     error: message,
     errorStatus: status,
   }),
+  buildDataFromCachePayload: (payload) => parseAntigravityGroupsFromCachePayload(payload),
   cardClassName: styles.antigravityCard,
   controlsClassName: styles.antigravityControls,
   controlClassName: styles.antigravityControl,
@@ -1185,6 +1524,7 @@ export const CODEX_CONFIG: QuotaConfig<
     error: message,
     errorStatus: status,
   }),
+  buildDataFromCachePayload: (payload, t) => parseCodexDataFromCachePayload(payload, t),
   cardClassName: styles.codexCard,
   controlsClassName: styles.codexControls,
   controlClassName: styles.codexControl,
@@ -1232,6 +1572,7 @@ export const GEMINI_CLI_CONFIG: QuotaConfig<
     error: message,
     errorStatus: status,
   }),
+  buildDataFromCachePayload: (payload) => parseGeminiCliDataFromCachePayload(payload),
   cardClassName: styles.geminiCliCard,
   controlsClassName: styles.geminiCliControls,
   controlClassName: styles.geminiCliControl,
@@ -1340,6 +1681,7 @@ export const KIMI_CONFIG: QuotaConfig<KimiQuotaState, KimiQuotaRow[]> = {
     error: message,
     errorStatus: status,
   }),
+  buildDataFromCachePayload: (payload) => parseKimiRowsFromCachePayload(payload),
   cardClassName: styles.kimiCard,
   controlsClassName: styles.kimiControls,
   controlClassName: styles.kimiControl,

@@ -404,6 +404,75 @@
   padding: $spacing-xs $spacing-sm;
 }
 
+.quotaCacheMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding-top: $spacing-xs;
+  margin-top: $spacing-xs;
+  border-top: 1px dashed color-mix(in srgb, var(--border-color) 78%, transparent);
+}
+
+.quotaCacheItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.quotaCacheLabel {
+  color: var(--text-tertiary);
+}
+
+.quotaCacheValue {
+  color: var(--text-secondary);
+}
+
+.quotaCacheBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  border: 1px solid transparent;
+}
+
+.quotaCacheBadgeFresh {
+  color: var(--success-color, #22c55e);
+  background-color: color-mix(in srgb, var(--success-color, #22c55e) 12%, var(--bg-secondary));
+  border-color: color-mix(in srgb, var(--success-color, #22c55e) 26%, transparent);
+}
+
+.quotaCacheBadgeRefreshing {
+  color: var(--primary-color);
+  background-color: color-mix(in srgb, var(--primary-color) 12%, var(--bg-secondary));
+  border-color: color-mix(in srgb, var(--primary-color) 24%, transparent);
+}
+
+.quotaCacheBadgePending {
+  color: var(--quota-medium-color, #e0aa14);
+  background-color: color-mix(in srgb, var(--quota-medium-color, #e0aa14) 14%, var(--bg-secondary));
+  border-color: color-mix(in srgb, var(--quota-medium-color, #e0aa14) 28%, transparent);
+}
+
+.quotaCacheBadgeRateLimited {
+  color: var(--warning-text);
+  background-color: var(--warning-bg);
+  border-color: var(--warning-border);
+}
+
+.quotaCacheBadgeUnauthorized,
+.quotaCacheBadgeError {
+  color: var(--danger-color);
+  background-color: rgba($error-color, 0.08);
+  border-color: rgba($error-color, 0.24);
+}
+
 .quotaWarning {
   font-size: 12px;
   color: var(--warning-text);
