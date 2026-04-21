@@ -132,6 +132,11 @@ function setIntFromStringInDoc(doc: YamlDocument, path: YamlPath, value: unknown
   }
 }
 
+const normalizeRoutingSourcePreference = (
+  value: unknown
+): VisualConfigValues['routingSourcePreference'] =>
+  value === 'api-first' ? 'api-first' : value === 'file-first' ? 'file-first' : 'none';
+
 function setForwardRequestHeadersInDoc(doc: YamlDocument, entries: HeaderEntry[]): void {
   const headerObject = buildHeaderObject(normalizeHeaderEntries(entries));
   if (Object.keys(headerObject).length > 0) {
@@ -749,6 +754,12 @@ function getNextDirtyFields(
   if (Object.prototype.hasOwnProperty.call(patch, 'routingStickyTTL')) {
     updateDirty('routingStickyTTL', nextValues.routingStickyTTL === baselineValues.routingStickyTTL);
   }
+  if (Object.prototype.hasOwnProperty.call(patch, 'routingSourcePreference')) {
+    updateDirty(
+      'routingSourcePreference',
+      nextValues.routingSourcePreference === baselineValues.routingSourcePreference
+    );
+  }
   if (Object.prototype.hasOwnProperty.call(patch, 'payloadDefaultRules')) {
     updateDirty(
       'payloadDefaultRules',
@@ -925,6 +936,7 @@ export function useVisualConfig() {
         maxRetryInterval: String(parsed['max-retry-interval'] ?? ''),
         quotaCacheRefreshInterval: String(parsed['quota-cache-refresh-interval'] ?? ''),
         routingStickyTTL: String(routing?.['sticky-ttl'] ?? ''),
+        routingSourcePreference: normalizeRoutingSourcePreference(routing?.['source-preference']),
         wsAuth: Boolean(parsed['ws-auth']),
 
         quotaSwitchProject: Boolean(quotaExceeded?.['switch-project'] ?? true),
@@ -1058,10 +1070,14 @@ export function useVisualConfig() {
 
         const routingStickyTTL =
           typeof values.routingStickyTTL === 'string' ? values.routingStickyTTL : '';
+        const routingSourcePreference = normalizeRoutingSourcePreference(
+          values.routingSourcePreference
+        );
         const shouldWriteRoutingStickyTTL = values.routingStrategy === 'sticky-round-robin';
         const routingDefined =
           docHas(doc, ['routing']) ||
           values.routingStrategy !== 'round-robin' ||
+          routingSourcePreference !== 'none' ||
           (shouldWriteRoutingStickyTTL && routingStickyTTL.trim());
         if (routingDefined) {
           ensureMapInDoc(doc, ['routing']);
@@ -1071,6 +1087,13 @@ export function useVisualConfig() {
             }
           } else {
             doc.setIn(['routing', 'strategy'], values.routingStrategy);
+          }
+          if (routingSourcePreference === 'none') {
+            if (docHas(doc, ['routing', 'source-preference'])) {
+              doc.deleteIn(['routing', 'source-preference']);
+            }
+          } else {
+            doc.setIn(['routing', 'source-preference'], routingSourcePreference);
           }
           if (shouldWriteRoutingStickyTTL) {
             setIntFromStringInDoc(doc, ['routing', 'sticky-ttl'], routingStickyTTL);

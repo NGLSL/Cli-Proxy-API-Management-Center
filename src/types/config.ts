@@ -26,6 +26,7 @@ export interface Config {
   forceModelPrefix?: boolean;
   routingStrategy?: string;
   routingStickyTTL?: number;
+  routingSourcePreference?: string;
   apiKeys?: string[];
   ampcode?: AmpcodeConfig;
   geminiApiKeys?: GeminiKeyConfig[];
@@ -51,6 +52,7 @@ export type RawConfigSection =
   | 'force-model-prefix'
   | 'routing/strategy'
   | 'routing/sticky-ttl'
+  | 'routing/source-preference'
   | 'api-keys'
   | 'ampcode'
   | 'gemini-api-key'

@@ -46,6 +46,7 @@ const SECTION_KEYS: RawConfigSection[] = [
   'force-model-prefix',
   'routing/strategy',
   'routing/sticky-ttl',
+  'routing/source-preference',
   'api-keys',
   'ampcode',
   'gemini-api-key',
@@ -83,6 +84,8 @@ const extractSectionValue = (config: Config | null, section?: RawConfigSection) 
       return config.routingStrategy;
     case 'routing/sticky-ttl':
       return config.routingStickyTTL;
+    case 'routing/source-preference':
+      return config.routingSourcePreference;
     case 'api-keys':
       return config.apiKeys;
     case 'ampcode':
@@ -228,6 +231,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
           break;
         case 'routing/sticky-ttl':
           nextConfig.routingStickyTTL = value as Config['routingStickyTTL'];
+          break;
+        case 'routing/source-preference':
+          nextConfig.routingSourcePreference = value as Config['routingSourcePreference'];
           break;
         case 'api-keys':
           nextConfig.apiKeys = value as Config['apiKeys'];

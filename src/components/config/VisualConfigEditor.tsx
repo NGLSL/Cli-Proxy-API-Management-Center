@@ -186,6 +186,8 @@ export function VisualConfigEditor({
   const shouldRenderFloatingSidebar = !isMobile && isFloatingSidebar && isCurrentLayer;
   const routingStrategyLabelId = useId();
   const routingStrategyHintId = `${routingStrategyLabelId}-hint`;
+  const routingSourcePreferenceLabelId = useId();
+  const routingSourcePreferenceHintId = `${routingSourcePreferenceLabelId}-hint`;
   const stickyTTLInputId = useId();
   const quotaRefreshIntervalInputId = useId();
   const quotaRefreshIntervalHintId = `${quotaRefreshIntervalInputId}-hint`;
@@ -881,6 +883,9 @@ export function VisualConfigEditor({
                   disabled={disabled}
                   error={maxRetryIntervalError}
                 />
+              </SectionGrid>
+
+              <SectionStack>
                 <FieldShell
                   label={t('config_management.visual.sections.network.routing_strategy')}
                   labelId={routingStrategyLabelId}
@@ -916,6 +921,44 @@ export function VisualConfigEditor({
                     }
                   />
                 </FieldShell>
+                <FieldShell
+                  label={t('config_management.visual.sections.network.source_preference')}
+                  labelId={routingSourcePreferenceLabelId}
+                  hint={t('config_management.visual.sections.network.source_preference_hint')}
+                  hintId={routingSourcePreferenceHintId}
+                >
+                  <Select
+                    value={values.routingSourcePreference}
+                    options={[
+                      {
+                        value: 'none',
+                        label: t('config_management.visual.sections.network.source_preference_none'),
+                      },
+                      {
+                        value: 'api-first',
+                        label: t(
+                          'config_management.visual.sections.network.source_preference_api_first'
+                        ),
+                      },
+                      {
+                        value: 'file-first',
+                        label: t(
+                          'config_management.visual.sections.network.source_preference_file_first'
+                        ),
+                      },
+                    ]}
+                    id={`${routingSourcePreferenceLabelId}-select`}
+                    disabled={disabled}
+                    ariaLabelledBy={routingSourcePreferenceLabelId}
+                    ariaDescribedBy={routingSourcePreferenceHintId}
+                    onChange={(nextValue) =>
+                      onChange({
+                        routingSourcePreference:
+                          nextValue as VisualConfigValues['routingSourcePreference'],
+                      })
+                    }
+                  />
+                </FieldShell>
                 {values.routingStrategy === 'sticky-round-robin' && (
                   <Input
                     label={t('config_management.visual.sections.network.sticky_ttl')}
@@ -929,7 +972,7 @@ export function VisualConfigEditor({
                     error={routingStickyTTLError}
                   />
                 )}
-              </SectionGrid>
+              </SectionStack>
 
               <SectionGrid>
                 <ToggleRow

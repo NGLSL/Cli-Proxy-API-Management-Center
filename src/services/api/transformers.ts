@@ -94,6 +94,9 @@ const normalizePrefix = (value: unknown): string | undefined => {
   return trimmed ? trimmed : undefined;
 };
 
+const normalizeRoutingSourcePreference = (value: unknown): Config['routingSourcePreference'] =>
+  value === 'api-first' ? 'api-first' : value === 'file-first' ? 'file-first' : 'none';
+
 const normalizeApiKeyEntry = (entry: unknown): ApiKeyEntry | null => {
   if (entry === undefined || entry === null) return null;
   const record = isRecord(entry) ? entry : null;
@@ -415,6 +418,10 @@ export const normalizeConfigResponse = (raw: unknown): Config => {
       config.routingStickyTTL = parsed;
     }
   }
+  const sourcePreferenceRaw = isRecord(routing)
+    ? (routing['source-preference'] ?? routing.sourcePreference)
+    : (raw['routing-source-preference'] ?? raw.routingSourcePreference);
+  config.routingSourcePreference = normalizeRoutingSourcePreference(sourcePreferenceRaw);
   const apiKeysRaw = raw['api-keys'] ?? raw.apiKeys;
   if (Array.isArray(apiKeysRaw)) {
     config.apiKeys = apiKeysRaw.map((key) => String(key)).filter((key) => key.trim() !== '');

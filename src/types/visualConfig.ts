@@ -84,6 +84,7 @@ export type VisualConfigValues = {
   maxRetryInterval: string;
   quotaCacheRefreshInterval: string;
   routingStickyTTL: string;
+  routingSourcePreference: 'none' | 'api-first' | 'file-first';
   quotaSwitchProject: boolean;
   quotaSwitchPreviewModel: boolean;
   quotaAntigravityCredits: boolean;
@@ -127,6 +128,7 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
   maxRetryInterval: '',
   quotaCacheRefreshInterval: '',
   routingStickyTTL: '',
+  routingSourcePreference: 'none',
   quotaSwitchProject: true,
   quotaSwitchPreviewModel: true,
   quotaAntigravityCredits: true,
