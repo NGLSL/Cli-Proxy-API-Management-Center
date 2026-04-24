@@ -3,12 +3,12 @@ import iconAntigravity from '@/assets/icons/antigravity.svg';
 import iconClaude from '@/assets/icons/claude.svg';
 import iconCodex from '@/assets/icons/codex.svg';
 import iconGemini from '@/assets/icons/gemini.svg';
-import iconIflow from '@/assets/icons/iflow.svg';
 import iconKimiDark from '@/assets/icons/kimi-dark.svg';
 import iconKimiLight from '@/assets/icons/kimi-light.svg';
 import iconQwen from '@/assets/icons/qwen.svg';
 import iconVertex from '@/assets/icons/vertex.svg';
 import type { AuthFileItem } from '@/types';
+import { formatUnixTimestamp } from '@/utils/format';
 import {
   normalizeAuthIndex,
   normalizeUsageSourceId,
@@ -87,11 +87,6 @@ export const TYPE_COLORS: Record<string, TypeColorSet> = {
     light: { bg: '#e0f7fa', text: '#006064' },
     dark: { bg: '#004d40', text: '#80deea' },
   },
-  // iFlow logo: 品红紫渐变 #5C5CFF → #AE5CFF，偏品红以区别于 Qwen 的紫罗兰
-  iflow: {
-    light: { bg: '#f5e3fc', text: '#9025c8' },
-    dark: { bg: '#521490', text: '#d49cf5' },
-  },
   // Vertex logo: Google 蓝 #4285F4
   vertex: {
     light: { bg: '#e4edfd', text: '#2b5fbc' },
@@ -114,7 +109,6 @@ export const AUTH_FILE_ICONS: Record<string, AuthFileIconAsset> = {
   codex: iconCodex,
   gemini: iconGemini,
   'gemini-cli': iconGemini,
-  iflow: iconIflow,
   kimi: { light: iconKimiLight, dark: iconKimiDark },
   qwen: iconQwen,
   vertex: iconVertex,
@@ -149,7 +143,6 @@ export const getTypeLabel = (t: TFunction, type: string): string => {
   const key = `auth_files.filter_${type}`;
   const translated = t(key);
   if (translated !== key) return translated;
-  if (type.toLowerCase() === 'iflow') return 'iFlow';
   return type.charAt(0).toUpperCase() + type.slice(1);
 };
 
@@ -200,6 +193,36 @@ export const normalizeExcludedModels = (value: unknown): string[] => {
 export const parseExcludedModelsText = (value: string): string[] =>
   normalizeExcludedModels(value.split(/[\n,]+/));
 
+export const isModelExcluded = (
+  modelId: string,
+  provider: string,
+  excluded: Record<string, string[]>
+): boolean => {
+  const normalizedModelId = modelId.trim().toLowerCase();
+  if (!normalizedModelId) return false;
+
+  const rules = excluded[normalizeProviderKey(provider)] ?? [];
+  return rules.some((rule) => {
+    const normalizedRule = String(rule ?? '')
+      .trim()
+      .toLowerCase();
+    if (!normalizedRule) return false;
+    if (normalizedRule === '*') return true;
+    if (!normalizedRule.includes('*')) return normalizedRule === normalizedModelId;
+
+    const pattern = normalizedRule
+      .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/\*/g, '.*');
+    return new RegExp(`^${pattern}$`, 'i').test(normalizedModelId);
+  });
+};
+
+export const formatModified = (file: AuthFileItem): string => {
+  if (!file.modified) return '-';
+  const formatted = formatUnixTimestamp(file.modified);
+  return formatted || '-';
+};
+
 export const parseDisableCoolingValue = (value: unknown): boolean | undefined => {
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number' && Number.isFinite(value)) return value !== 0;
@@ -234,73 +257,17 @@ export function isRuntimeOnlyAuthFile(file: AuthFileItem): boolean {
 
 export function resolveAuthFileStats(file: AuthFileItem, stats: KeyStats): KeyStatBucket {
   const defaultStats: KeyStatBucket = { success: 0, failure: 0 };
-  const rawFileName = file?.name || '';
 
-  // 兼容 auth_index 和 authIndex 两种字段名（API 返回的是 auth_index）
   const rawAuthIndex = file['auth_index'] ?? file.authIndex;
-  const authIndexKey = normalizeAuthIndex(rawAuthIndex);
-
-  // 尝试根据 authIndex 匹配
-  if (authIndexKey && stats.byAuthIndex?.[authIndexKey]) {
-    return stats.byAuthIndex[authIndexKey];
+  const authIndex = normalizeAuthIndex(rawAuthIndex);
+  if (authIndex) {
+    return stats.byAuthIndex[authIndex] || defaultStats;
   }
 
-  // 尝试根据 source (文件名) 匹配
-  const fileNameId = rawFileName ? normalizeUsageSourceId(rawFileName) : '';
-  if (fileNameId && stats.bySource?.[fileNameId]) {
-    const fromName = stats.bySource[fileNameId];
-    if (fromName.success > 0 || fromName.failure > 0) {
-      return fromName;
-    }
-  }
-
-  // 尝试去掉扩展名后匹配
-  if (rawFileName) {
-    const nameWithoutExt = rawFileName.replace(/\.[^/.]+$/, '');
-    if (nameWithoutExt && nameWithoutExt !== rawFileName) {
-      const nameWithoutExtId = normalizeUsageSourceId(nameWithoutExt);
-      const fromNameWithoutExt = nameWithoutExtId ? stats.bySource?.[nameWithoutExtId] : undefined;
-      if (
-        fromNameWithoutExt &&
-        (fromNameWithoutExt.success > 0 || fromNameWithoutExt.failure > 0)
-      ) {
-        return fromNameWithoutExt;
-      }
-    }
+  const usageSourceId = normalizeUsageSourceId(file['usage_source_id'] ?? file.usageSourceId);
+  if (usageSourceId) {
+    return stats.bySource[usageSourceId] || defaultStats;
   }
 
   return defaultStats;
 }
-
-export const formatModified = (item: AuthFileItem): string => {
-  const raw = item['modtime'] ?? item.modified;
-  if (!raw) return '-';
-  const asNumber = Number(raw);
-  const date =
-    Number.isFinite(asNumber) && !Number.isNaN(asNumber)
-      ? new Date(asNumber < 1e12 ? asNumber * 1000 : asNumber)
-      : new Date(String(raw));
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
-};
-
-// 检查模型是否被 OAuth 排除
-export const isModelExcluded = (
-  modelId: string,
-  providerType: string,
-  excluded: Record<string, string[]>
-): boolean => {
-  const providerKey = normalizeProviderKey(providerType);
-  const excludedModels = excluded[providerKey] || excluded[providerType] || [];
-  return excludedModels.some((pattern) => {
-    if (pattern.includes('*')) {
-      // 支持通配符匹配：先转义正则特殊字符，再将 * 视为通配符
-      const regexSafePattern = pattern
-        .split('*')
-        .map((segment) => segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-        .join('.*');
-      const regex = new RegExp(`^${regexSafePattern}$`, 'i');
-      return regex.test(modelId);
-    }
-    return pattern.toLowerCase() === modelId.toLowerCase();
-  });
-};
