@@ -49,6 +49,7 @@ export interface ProviderKeyConfig {
 export interface OpenAIProviderConfig {
   name: string;
   prefix?: string;
+  disabled?: boolean;
   baseUrl: string;
   apiKeyEntries: ApiKeyEntry[];
   headers?: Record<string, string>;

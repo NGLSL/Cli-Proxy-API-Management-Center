@@ -44,6 +44,7 @@ export type OpenAIEditOutletContext = {
 const buildEmptyForm = (): OpenAIFormState => ({
   name: '',
   priority: undefined,
+  disabled: false,
   prefix: '',
   baseUrl: '',
   headers: [],
@@ -108,6 +109,7 @@ const buildOpenAIBaseline = (form: OpenAIFormState, testModel: string): OpenAIEd
   name: String(form.name ?? '').trim(),
   priority:
     form.priority !== undefined && Number.isFinite(form.priority) ? Math.trunc(form.priority) : null,
+  disabled: Boolean(form.disabled),
   prefix: String(form.prefix ?? '').trim(),
   baseUrl: String(form.baseUrl ?? '').trim(),
   headers: normalizeHeaderEntries(form.headers),
@@ -287,6 +289,7 @@ export function AiProvidersOpenAIEditLayout() {
       const seededForm: OpenAIFormState = {
         name: initialData.name,
         priority: initialData.priority,
+        disabled: Boolean(initialData.disabled),
         prefix: initialData.prefix ?? '',
         baseUrl: initialData.baseUrl,
         headers: headersToEntries(initialData.headers),
@@ -411,6 +414,7 @@ export function AiProvidersOpenAIEditLayout() {
     baseline !== null &&
     (baseline.name !== form.name.trim() ||
       baseline.priority !== normalizedPriority ||
+      baseline.disabled !== Boolean(form.disabled) ||
       baseline.prefix !== form.prefix.trim() ||
       baseline.baseUrl !== form.baseUrl.trim() ||
       baseline.testModel !== normalizedTestModel ||
@@ -456,6 +460,7 @@ export function AiProvidersOpenAIEditLayout() {
       const payload: OpenAIProviderConfig = {
         name,
         prefix: form.prefix?.trim() || undefined,
+        disabled: Boolean(form.disabled),
         baseUrl,
         headers: buildHeaderObject(form.headers),
         apiKeyEntries: form.apiKeyEntries.map((entry: ApiKeyEntry) => ({

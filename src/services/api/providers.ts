@@ -144,6 +144,7 @@ const serializeOpenAIProvider = (provider: OpenAIProviderConfig) => {
       ? provider.apiKeyEntries.map((entry) => serializeApiKeyEntry(entry))
       : []
   };
+  payload.disabled = Boolean(provider.disabled);
   if (provider.prefix?.trim()) payload.prefix = provider.prefix.trim();
   const headers = serializeHeaders(provider.headers);
   if (headers) payload.headers = headers;

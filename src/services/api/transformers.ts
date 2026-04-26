@@ -231,6 +231,7 @@ const normalizeOpenAIProvider = (provider: unknown): OpenAIProviderConfig | null
   const models = normalizeModelAliases(provider.models);
   const priority = provider.priority ?? provider['priority'];
   const testModel = provider['test-model'] ?? provider.testModel;
+  const disabled = normalizeBoolean(provider.disabled ?? provider['disabled']);
 
   const result: OpenAIProviderConfig = {
     name: String(name),
@@ -244,6 +245,7 @@ const normalizeOpenAIProvider = (provider: unknown): OpenAIProviderConfig | null
   if (models.length) result.models = models;
   if (priority !== undefined) result.priority = Number(priority);
   if (testModel) result.testModel = String(testModel);
+  if (disabled !== undefined) result.disabled = disabled;
   return result;
 };
 

@@ -10,6 +10,7 @@ export interface ModelEntry {
 export interface OpenAIFormState {
   name: string;
   priority?: number;
+  disabled: boolean;
   prefix: string;
   baseUrl: string;
   headers: HeaderEntry[];

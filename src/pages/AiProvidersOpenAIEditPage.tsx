@@ -7,6 +7,7 @@ import { HeaderInputList } from '@/components/ui/HeaderInputList';
 import { Input } from '@/components/ui/Input';
 import { ModelInputList } from '@/components/ui/ModelInputList';
 import { Select } from '@/components/ui/Select';
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
 import { useNotificationStore } from '@/stores';
@@ -568,6 +569,17 @@ export function AiProvidersOpenAIEditPage() {
               onChange={(e) => setForm((prev) => ({ ...prev, baseUrl: e.target.value }))}
               disabled={saving || disableControls || isTestingKeys}
             />
+
+            <div className="form-group">
+              <ToggleSwitch
+                label={t('ai_providers.openai_enabled_label')}
+                checked={!form.disabled}
+                onChange={(enabled) => setForm((prev) => ({ ...prev, disabled: !enabled }))}
+                disabled={saving || disableControls || isTestingKeys}
+                ariaLabel={t('ai_providers.openai_enabled_label')}
+              />
+              <div className={styles.sectionHint}>{t('ai_providers.openai_enabled_hint')}</div>
+            </div>
 
             <HeaderInputList
               entries={form.headers}

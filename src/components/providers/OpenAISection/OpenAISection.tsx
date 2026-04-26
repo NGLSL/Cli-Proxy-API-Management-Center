@@ -93,6 +93,7 @@ export function OpenAISection({
           onEdit={onEdit}
           onDelete={onDelete}
           actionsDisabled={actionsDisabled}
+          getRowDisabled={(item) => Boolean(item.disabled)}
           renderContent={(item) => {
             const stats = getOpenAIProviderStats(item.apiKeyEntries, keyStats, item.prefix);
             const headerEntries = Object.entries(item.headers || {});
@@ -101,7 +102,14 @@ export function OpenAISection({
 
             return (
               <Fragment>
-                <div className="item-title">{item.name}</div>
+                <div className="item-title">
+                  {item.name}
+                  {item.disabled && (
+                    <span className="status-badge muted">
+                      {t('ai_providers.openai_disabled_badge')}
+                    </span>
+                  )}
+                </div>
                 {item.priority !== undefined && (
                   <div className={styles.fieldRow}>
                     <span className={styles.fieldLabel}>{t('common.priority')}:</span>
