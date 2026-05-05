@@ -711,15 +711,13 @@ export function extractTotalTokens(detail: unknown): number {
   if (typeof tokens.total_tokens === 'number') {
     return tokens.total_tokens;
   }
+  // total_tokens 缺失时的兜底计算：只累加 input + output + reasoning，
+  // 不加 cachedTokens，因为缓存读取是已缓存的旧 token，不是本次消耗的新 token
   const inputTokens = typeof tokens.input_tokens === 'number' ? tokens.input_tokens : 0;
   const outputTokens = typeof tokens.output_tokens === 'number' ? tokens.output_tokens : 0;
   const reasoningTokens = typeof tokens.reasoning_tokens === 'number' ? tokens.reasoning_tokens : 0;
-  const cachedTokens = Math.max(
-    typeof tokens.cached_tokens === 'number' ? Math.max(tokens.cached_tokens, 0) : 0,
-    typeof tokens.cache_tokens === 'number' ? Math.max(tokens.cache_tokens, 0) : 0
-  );
 
-  return inputTokens + outputTokens + reasoningTokens + cachedTokens;
+  return inputTokens + outputTokens + reasoningTokens;
 }
 
 /**

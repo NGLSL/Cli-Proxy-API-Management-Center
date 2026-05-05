@@ -91,11 +91,15 @@ const extractMetric = (value: unknown): number | null => {
   return value;
 };
 
-const calculateCacheRate = (cachedTokens: number, totalTokens: number): number | null => {
-  if (totalTokens <= 0) {
+// 缓存命中率 = 缓存读取token / (输入token + 缓存读取token)
+// 分母用 inputTokens + cachedTokens 而不是 totalTokens，因为 totalTokens 不含缓存token，
+// 在缓存量很大时（如 147K cached vs 797 total），用 totalTokens 做分母会导致超过 10000% 的荒谬百分比
+const calculateCacheRate = (cachedTokens: number, inputTokens: number): number | null => {
+  const denominator = inputTokens + Math.max(cachedTokens, 0);
+  if (denominator <= 0) {
     return null;
   }
-  return Math.max(cachedTokens, 0) / totalTokens;
+  return Math.max(cachedTokens, 0) / denominator;
 };
 
 const getExportCacheRate = (value: number | null): string => {
@@ -209,7 +213,7 @@ export function RequestEventsDetailsCard({
         );
         const firstByteLatencyMs = extractFirstByteLatencyMs(detail.first_byte_latency_ms);
         const latencyMs = extractLatencyMs(detail);
-        const cacheRate = calculateCacheRate(cachedTokens, totalTokens);
+        const cacheRate = calculateCacheRate(cachedTokens, inputTokens);
         const chunkCount = extractMetric(detail.chunk_count);
         const responseBytes = extractMetric(detail.response_bytes);
         const apiResponseBytes = extractMetric(detail.api_response_bytes);
