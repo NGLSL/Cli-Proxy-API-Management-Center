@@ -91,15 +91,20 @@ const extractMetric = (value: unknown): number | null => {
   return value;
 };
 
-// 缓存命中率 = 缓存读取token / (输入token + 缓存读取token)
-// 分母用 inputTokens + cachedTokens 而不是 totalTokens，因为 totalTokens 不含缓存token，
-// 在缓存量很大时（如 147K cached vs 797 total），用 totalTokens 做分母会导致超过 10000% 的荒谬百分比
+// 缓存命中率需要兼容新旧两种后端口径：
+// 新口径的 inputTokens 已包含 cachedTokens，分母直接用 inputTokens；
+// 旧记录的 inputTokens 只包含未缓存输入，分母继续用 inputTokens + cachedTokens。
 const calculateCacheRate = (cachedTokens: number, inputTokens: number): number | null => {
-  const denominator = inputTokens + Math.max(cachedTokens, 0);
+  const cached = Math.max(cachedTokens, 0);
+  const input = Math.max(inputTokens, 0);
+  if (input >= cached && input > 0) {
+    return cached / input;
+  }
+  const denominator = input + cached;
   if (denominator <= 0) {
     return null;
   }
-  return Math.max(cachedTokens, 0) / denominator;
+  return cached / denominator;
 };
 
 const getExportCacheRate = (value: number | null): string => {
