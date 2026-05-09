@@ -2,6 +2,13 @@ import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@
 import type { CredentialInfo, SourceInfo } from '@/types/sourceInfo';
 import { buildCandidateUsageSourceIds, normalizeAuthIndex } from '@/utils/usage';
 
+const providerApiKeyEntries = (item: ProviderKeyConfig) => {
+  if (item.apiKeyEntries?.length) {
+    return item.apiKeyEntries;
+  }
+  return item.apiKey ? [{ apiKey: item.apiKey }] : [];
+};
+
 export interface SourceInfoMapInput {
   geminiApiKeys?: GeminiKeyConfig[];
   claudeApiKeys?: ProviderKeyConfig[];
@@ -29,7 +36,6 @@ export function buildSourceInfoMap(input: SourceInfoMapInput): Map<string, Sourc
   }> = [
     { items: input.geminiApiKeys || [], type: 'gemini', label: 'Gemini' },
     { items: input.claudeApiKeys || [], type: 'claude', label: 'Claude' },
-    { items: input.codexApiKeys || [], type: 'codex', label: 'Codex' },
     { items: input.vertexApiKeys || [], type: 'vertex', label: 'Vertex' },
   ];
 
@@ -42,6 +48,17 @@ export function buildSourceInfoMap(input: SourceInfoMapInput): Map<string, Sourc
         buildCandidateUsageSourceIds({ apiKey: item.apiKey, prefix: item.prefix })
       );
     });
+  });
+
+  // Codex 支持同一配置块下的多 apiKeyEntries，来源归因需要把这些 key 聚合到同一个展示名。
+  (input.codexApiKeys || []).forEach((item, index) => {
+    const displayName = item.prefix?.trim() || `Codex #${index + 1}`;
+    const candidates = new Set<string>();
+    buildCandidateUsageSourceIds({ prefix: item.prefix }).forEach((id) => candidates.add(id));
+    providerApiKeyEntries(item).forEach((entry) => {
+      buildCandidateUsageSourceIds({ apiKey: entry.apiKey }).forEach((id) => candidates.add(id));
+    });
+    registerCandidates(displayName, 'codex', Array.from(candidates));
   });
 
   // OpenAI 特殊处理：多 apiKeyEntries

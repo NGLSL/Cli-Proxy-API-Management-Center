@@ -1,4 +1,10 @@
-import type { AmpcodeConfig, AmpcodeModelMapping, AmpcodeUpstreamApiKeyMapping, ApiKeyEntry } from '@/types';
+import type {
+  AmpcodeConfig,
+  AmpcodeModelMapping,
+  AmpcodeUpstreamApiKeyMapping,
+  ApiKeyEntry,
+  ProviderKeyConfig,
+} from '@/types';
 import { buildCandidateUsageSourceIds, type KeyStatBucket, type KeyStats } from '@/utils/usage';
 import type { AmpcodeFormState, AmpcodeUpstreamApiKeyEntry, ModelEntry } from './types';
 
@@ -109,8 +115,8 @@ export const getStatsBySource = (
   return { success, failure };
 };
 
-// 对于 OpenAI 提供商，汇总所有 apiKeyEntries 的统计 - 与旧版逻辑一致
-export const getOpenAIProviderStats = (
+// 对于多 key 提供商，汇总所有 apiKeyEntries 的统计 - 逻辑与 OpenAI 一致，Codex/其他 provider 也可以复用
+export const getApiKeyEntriesStats = (
   apiKeyEntries: ApiKeyEntry[] | undefined,
   keyStats: KeyStats,
   providerPrefix?: string
@@ -133,6 +139,32 @@ export const getOpenAIProviderStats = (
   });
 
   return { success, failure };
+};
+
+export const getOpenAIProviderStats = getApiKeyEntriesStats;
+
+export const getProviderApiKeyEntries = (
+  config?: Pick<ProviderKeyConfig, 'apiKey' | 'apiKeyEntries' | 'proxyUrl'>
+): ApiKeyEntry[] => {
+  const sharedProxyUrl = String(config?.proxyUrl ?? '').trim();
+  if (config?.apiKeyEntries?.length) {
+    return config.apiKeyEntries.map((entry) => ({
+      ...entry,
+      proxyUrl: String(entry?.proxyUrl ?? '').trim() || sharedProxyUrl,
+    }));
+  }
+  const apiKey = String(config?.apiKey ?? '').trim();
+  if (!apiKey) {
+    return [];
+  }
+  return [buildApiKeyEntry({ apiKey, proxyUrl: String(config?.proxyUrl ?? '').trim() })];
+};
+
+export const getProviderPrimaryApiKey = (
+  config?: Pick<ProviderKeyConfig, 'apiKey' | 'apiKeyEntries' | 'proxyUrl'>
+): string => {
+  const entries = getProviderApiKeyEntries(config);
+  return entries[0]?.apiKey ?? String(config?.apiKey ?? '').trim();
 };
 
 export const buildApiKeyEntry = (input?: Partial<ApiKeyEntry>): ApiKeyEntry => ({

@@ -73,6 +73,7 @@ const buildEmptyForm = (): ProviderFormState => ({
   prefix: '',
   baseUrl: '',
   proxyUrl: '',
+  apiKeyEntries: [],
   headers: [],
   models: [],
   excludedModels: [],

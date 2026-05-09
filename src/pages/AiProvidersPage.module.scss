@@ -884,6 +884,12 @@
   }
 }
 
+.codexKeyTableHeader,
+.codexKeyTableRow {
+  grid-template-columns: 46px minmax(220px, 1.4fr) minmax(200px, 1.1fr) 110px;
+  min-width: 620px;
+}
+
 // 列定义
 .keyTableColIndex {
   display: flex;

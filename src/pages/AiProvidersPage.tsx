@@ -12,6 +12,7 @@ import {
   useProviderStats,
 } from '@/components/providers';
 import {
+  getProviderPrimaryApiKey,
   withDisableAllModelsRule,
   withoutDisableAllModelsRule,
 } from '@/components/providers/utils';
@@ -228,7 +229,7 @@ export function AiProvidersPage() {
     const current = source[index];
     if (!current) return;
 
-    const switchingKey = `${provider}:${current.apiKey}`;
+    const switchingKey = `${provider}:${getProviderPrimaryApiKey(current)}`;
     setConfigSwitchingKey(switchingKey);
 
     const previousList = source;
@@ -297,7 +298,7 @@ export function AiProvidersPage() {
       onConfirm: async () => {
         try {
           if (type === 'codex') {
-            await providersApi.deleteCodexConfig(entry.apiKey, entry.baseUrl);
+            await providersApi.deleteCodexConfig(getProviderPrimaryApiKey(entry), entry.baseUrl);
             const next = codexConfigs.filter((_, idx) => idx !== index);
             setCodexConfigs(next);
             updateConfigValue('codex-api-key', next);

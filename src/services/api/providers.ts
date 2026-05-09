@@ -63,8 +63,11 @@ const serializeApiKeyEntry = (entry: ApiKeyEntry) => {
   return payload;
 };
 
-const serializeProviderKey = (config: ProviderKeyConfig) => {
+const serializeProviderKey = (config: ProviderKeyConfig, options?: { includeApiKeyEntries?: boolean }) => {
   const payload: Record<string, unknown> = { 'api-key': config.apiKey };
+  if (options?.includeApiKeyEntries && Array.isArray(config.apiKeyEntries) && config.apiKeyEntries.length) {
+    payload['api-key-entries'] = config.apiKeyEntries.map((entry) => serializeApiKeyEntry(entry));
+  }
   if (config.priority !== undefined) payload.priority = config.priority;
   if (config.prefix?.trim()) payload.prefix = config.prefix.trim();
   if (config.baseUrl) payload['base-url'] = config.baseUrl;
@@ -178,10 +181,16 @@ export const providersApi = {
   },
 
   saveCodexConfigs: (configs: ProviderKeyConfig[]) =>
-    apiClient.put('/codex-api-key', configs.map((item) => serializeProviderKey(item))),
+    apiClient.put(
+      '/codex-api-key',
+      configs.map((item) => serializeProviderKey(item, { includeApiKeyEntries: true }))
+    ),
 
   updateCodexConfig: (index: number, value: ProviderKeyConfig) =>
-    apiClient.patch('/codex-api-key', { index, value: serializeProviderKey(value) }),
+    apiClient.patch('/codex-api-key', {
+      index,
+      value: serializeProviderKey(value, { includeApiKeyEntries: true })
+    }),
 
   deleteCodexConfig: (apiKey: string, baseUrl?: string) =>
     apiClient.delete(`/codex-api-key${buildProviderDeleteQuery(apiKey, baseUrl)}`),

@@ -18,8 +18,9 @@ import type { ProviderKeyConfig } from '@/types';
 import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
 import { areKeyValueEntriesEqual, areModelEntriesEqual, areStringArraysEqual } from '@/utils/compare';
 import { entriesToModels, modelsToEntries } from '@/components/ui/modelInputListUtils';
-import { excludedModelsToText, parseExcludedModels } from '@/components/providers/utils';
+import { buildApiKeyEntry, excludedModelsToText, parseExcludedModels } from '@/components/providers/utils';
 import type { ProviderFormState } from '@/components/providers';
+import type { ApiKeyEntry } from '@/types';
 import type { ModelInfo } from '@/utils/models';
 import layoutStyles from './AiProvidersEditLayout.module.scss';
 import styles from './AiProvidersPage.module.scss';
@@ -28,6 +29,7 @@ type LocationState = { fromAiProviders?: boolean } | null;
 
 const buildEmptyForm = (): ProviderFormState => ({
   apiKey: '',
+  apiKeyEntries: [buildApiKeyEntry()],
   priority: undefined,
   prefix: '',
   baseUrl: '',
@@ -65,29 +67,85 @@ const normalizeModelEntries = (entries: Array<{ name: string; alias: string }>) 
   }, []);
 
 type CodexFormBaseline = {
-  apiKey: string;
+  apiKeyEntries: Array<{ apiKey: string; proxyUrl: string }>;
   priority: number | null;
   prefix: string;
   baseUrl: string;
   websockets: boolean;
-  proxyUrl: string;
   headers: ReturnType<typeof normalizeHeaderEntries>;
   models: ReturnType<typeof normalizeModelEntries>;
   excludedModels: string[];
 };
 
 const buildCodexBaseline = (form: ProviderFormState): CodexFormBaseline => ({
-  apiKey: String(form.apiKey ?? '').trim(),
+  apiKeyEntries: normalizeCodexApiKeyEntries(form.apiKeyEntries, form.apiKey, form.proxyUrl),
   priority:
     form.priority !== undefined && Number.isFinite(form.priority) ? Math.trunc(form.priority) : null,
   prefix: String(form.prefix ?? '').trim(),
   baseUrl: String(form.baseUrl ?? '').trim(),
   websockets: Boolean(form.websockets),
-  proxyUrl: String(form.proxyUrl ?? '').trim(),
   headers: normalizeHeaderEntries(form.headers),
   models: normalizeModelEntries(form.modelEntries),
   excludedModels: parseExcludedModels(form.excludedText ?? ''),
 });
+
+const normalizeCodexApiKeyEntries = (
+  entries: ApiKeyEntry[] | undefined,
+  legacyApiKey?: string,
+  legacyProxyUrl?: string
+) => {
+  const sourceEntries = Array.isArray(entries) && entries.length > 0
+    ? entries
+    : legacyApiKey
+      ? [buildApiKeyEntry({ apiKey: legacyApiKey, proxyUrl: legacyProxyUrl ?? '' })]
+      : [];
+  const seen = new Set<string>();
+  return sourceEntries.reduce<Array<{ apiKey: string; proxyUrl: string }>>((acc, entry) => {
+    const apiKey = String(entry?.apiKey ?? '').trim();
+    const proxyUrl = String(entry?.proxyUrl ?? '').trim();
+    if (!apiKey) return acc;
+    const key = `${apiKey}\u0000${proxyUrl}`;
+    if (seen.has(key)) return acc;
+    seen.add(key);
+    acc.push({ apiKey, proxyUrl });
+    return acc;
+  }, []);
+};
+
+const areCodexApiKeyEntriesEqual = (
+  a: Array<{ apiKey: string; proxyUrl: string }>,
+  b: Array<{ apiKey: string; proxyUrl: string }>
+) =>
+  a.length === b.length &&
+  a.every((entry, index) => entry.apiKey === b[index]?.apiKey && entry.proxyUrl === b[index]?.proxyUrl);
+
+const buildCodexApiKeyEntryPayload = (form: ProviderFormState): ApiKeyEntry[] => {
+  const sourceEntries = Array.isArray(form.apiKeyEntries) && form.apiKeyEntries.length > 0
+    ? form.apiKeyEntries
+    : form.apiKey
+      ? [buildApiKeyEntry({ apiKey: form.apiKey, proxyUrl: form.proxyUrl ?? '' })]
+      : [];
+  const seen = new Set<string>();
+  return sourceEntries.reduce<ApiKeyEntry[]>((acc, entry) => {
+    const apiKey = String(entry?.apiKey ?? '').trim();
+    const proxyUrl = String(entry?.proxyUrl ?? '').trim();
+    if (!apiKey) return acc;
+    const uniqueKey = `${apiKey}\u0000${proxyUrl}`;
+    if (seen.has(uniqueKey)) return acc;
+    seen.add(uniqueKey);
+
+    const normalizedEntry: ApiKeyEntry = { apiKey };
+    if (proxyUrl) {
+      normalizedEntry.proxyUrl = proxyUrl;
+    }
+    const headers = buildHeaderObject(entry?.headers);
+    if (Object.keys(headers).length > 0) {
+      normalizedEntry.headers = headers;
+    }
+    acc.push(normalizedEntry);
+    return acc;
+  }, []);
+};
 
 export function AiProvidersCodexEditPage() {
   const { t } = useTranslation();
@@ -186,8 +244,17 @@ export function AiProvidersCodexEditPage() {
     if (loading) return;
 
     if (initialData) {
+      const sharedProxyUrl = String(initialData.proxyUrl ?? '').trim();
+      const apiKeyEntries = initialData.apiKeyEntries?.length
+        ? initialData.apiKeyEntries.map((entry) => ({
+            ...entry,
+            proxyUrl: String(entry?.proxyUrl ?? '').trim() || sharedProxyUrl,
+          }))
+        : [buildApiKeyEntry({ apiKey: initialData.apiKey, proxyUrl: sharedProxyUrl })];
       const nextForm: ProviderFormState = {
         ...initialData,
+        apiKey: apiKeyEntries[0]?.apiKey ?? initialData.apiKey ?? '',
+        apiKeyEntries,
         websockets: Boolean(initialData.websockets),
         headers: headersToEntries(initialData.headers),
         modelEntries: modelsToEntries(initialData.models),
@@ -206,6 +273,14 @@ export function AiProvidersCodexEditPage() {
   const normalizedModels = useMemo(
     () => normalizeModelEntries(form.modelEntries),
     [form.modelEntries]
+  );
+  const normalizedApiKeyEntries = useMemo(
+    () => normalizeCodexApiKeyEntries(form.apiKeyEntries, form.apiKey, form.proxyUrl),
+    [form.apiKey, form.apiKeyEntries, form.proxyUrl]
+  );
+  const firstModelDiscoveryApiKey = useMemo(
+    () => normalizedApiKeyEntries[0]?.apiKey ?? '',
+    [normalizedApiKeyEntries]
   );
   const normalizedExcludedModels = useMemo(
     () => parseExcludedModels(form.excludedText ?? ''),
@@ -229,12 +304,11 @@ export function AiProvidersCodexEditPage() {
     [baseline.excludedModels, normalizedExcludedModels]
   );
   const isDirty =
-    baseline.apiKey !== form.apiKey.trim() ||
+    !areCodexApiKeyEntriesEqual(baseline.apiKeyEntries, normalizedApiKeyEntries) ||
     baseline.priority !== normalizedPriority ||
     baseline.prefix !== String(form.prefix ?? '').trim() ||
     baseline.baseUrl !== String(form.baseUrl ?? '').trim() ||
     baseline.websockets !== Boolean(form.websockets) ||
-    baseline.proxyUrl !== String(form.proxyUrl ?? '').trim() ||
     isHeadersDirty ||
     isModelsDirty ||
     isExcludedModelsDirty;
@@ -325,7 +399,7 @@ export function AiProvidersCodexEditPage() {
       const hasCustomAuthorization = Object.keys(headerObject).some(
         (key) => key.toLowerCase() === 'authorization'
       );
-      const apiKey = form.apiKey.trim() || undefined;
+      const apiKey = firstModelDiscoveryApiKey || undefined;
       const list = await modelsApi.fetchV1ModelsViaApiCall(
         form.baseUrl ?? '',
         hasCustomAuthorization ? undefined : apiKey,
@@ -343,7 +417,7 @@ export function AiProvidersCodexEditPage() {
         setModelDiscoveryFetching(false);
       }
     }
-  }, [form.apiKey, form.baseUrl, form.headers, t]);
+  }, [firstModelDiscoveryApiKey, form.baseUrl, form.headers, t]);
 
   useEffect(() => {
     if (!modelDiscoveryOpen) {
@@ -366,7 +440,7 @@ export function AiProvidersCodexEditPage() {
     const hasCustomAuthorization = Object.keys(headerObject).some(
       (key) => key.toLowerCase() === 'authorization'
     );
-    const hasApiKeyField = Boolean(form.apiKey.trim());
+    const hasApiKeyField = Boolean(firstModelDiscoveryApiKey);
     const canAutoFetch = hasApiKeyField || hasCustomAuthorization;
 
     if (!canAutoFetch) return;
@@ -375,12 +449,12 @@ export function AiProvidersCodexEditPage() {
       .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
       .map(([key, value]) => `${key}:${value}`)
       .join('|');
-    const signature = `${nextEndpoint}||${form.apiKey.trim()}||${headerSignature}`;
+    const signature = `${nextEndpoint}||${firstModelDiscoveryApiKey}||${headerSignature}`;
     if (autoFetchSignatureRef.current === signature) return;
     autoFetchSignatureRef.current = signature;
 
     void fetchCodexModelDiscovery();
-  }, [fetchCodexModelDiscovery, form.apiKey, form.baseUrl, form.headers, modelDiscoveryOpen]);
+  }, [fetchCodexModelDiscovery, firstModelDiscoveryApiKey, form.baseUrl, form.headers, modelDiscoveryOpen]);
 
   useEffect(() => {
     const availableNames = new Set(discoveredModels.map((model) => model.name));
@@ -442,16 +516,23 @@ export function AiProvidersCodexEditPage() {
       return;
     }
 
+    const apiKeyEntries = buildCodexApiKeyEntryPayload(form);
+    if (apiKeyEntries.length === 0) {
+      showNotification(t('notification.codex_key_required'), 'error');
+      return;
+    }
+
     setSaving(true);
     setError('');
     try {
       const payload: ProviderKeyConfig = {
-        apiKey: form.apiKey.trim(),
+        // 顶层 api-key 只作为旧版接口和列表删除的兼容字段；实际多 key 配置写入 api-key-entries。
+        apiKey: apiKeyEntries[0]?.apiKey ?? '',
+        apiKeyEntries,
         priority: form.priority !== undefined ? Math.trunc(form.priority) : undefined,
         prefix: form.prefix?.trim() || undefined,
         baseUrl,
         websockets: Boolean(form.websockets),
-        proxyUrl: form.proxyUrl?.trim() || undefined,
         headers: buildHeaderObject(form.headers),
         models: entriesToModels(form.modelEntries),
         excludedModels: parseExcludedModels(form.excludedText),
@@ -472,7 +553,7 @@ export function AiProvidersCodexEditPage() {
         'success'
       );
       allowNextNavigation();
-      setBaseline(buildCodexBaseline(form));
+      setBaseline(buildCodexBaseline({ ...form, apiKey: payload.apiKey, apiKeyEntries, proxyUrl: '' }));
       handleBack();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
@@ -503,6 +584,105 @@ export function AiProvidersCodexEditPage() {
     Boolean((form.baseUrl ?? '').trim());
   const canApplyModelDiscovery =
     !disableControls && !saving && !modelDiscoveryFetching && modelDiscoverySelected.size > 0;
+
+  const renderKeyEntries = (entries: ApiKeyEntry[]) => {
+    const list = entries.length ? entries : [buildApiKeyEntry()];
+
+    const updateEntry = (idx: number, field: keyof ApiKeyEntry, value: string) => {
+      const next = list.map((entry, i) => (i === idx ? { ...entry, [field]: value } : entry));
+      const firstKey = next.find((entry) => String(entry?.apiKey ?? '').trim())?.apiKey ?? '';
+      setForm((prev) => ({
+        ...prev,
+        apiKey: firstKey,
+        apiKeyEntries: next,
+        proxyUrl: '',
+      }));
+    };
+
+    const removeEntry = (idx: number) => {
+      const next = list.filter((_, i) => i !== idx);
+      const nextEntries = next.length ? next : [buildApiKeyEntry()];
+      const firstKey = nextEntries.find((entry) => String(entry?.apiKey ?? '').trim())?.apiKey ?? '';
+      setForm((prev) => ({
+        ...prev,
+        apiKey: firstKey,
+        apiKeyEntries: nextEntries,
+        proxyUrl: '',
+      }));
+    };
+
+    const addEntry = () => {
+      const defaultProxyUrl = list.find((entry) => String(entry?.proxyUrl ?? '').trim())?.proxyUrl ?? '';
+      const next = [...list, buildApiKeyEntry({ proxyUrl: defaultProxyUrl })];
+      setForm((prev) => ({
+        ...prev,
+        apiKeyEntries: next,
+        proxyUrl: '',
+      }));
+    };
+
+    return (
+      <div className={styles.keyEntriesList}>
+        <div className={styles.keyEntriesToolbar}>
+          <span className={styles.keyEntriesCount}>
+            {t('ai_providers.codex_keys_count')}: {list.length}
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={addEntry}
+            disabled={disableControls || saving}
+            className={styles.addKeyButton}
+          >
+            {t('ai_providers.codex_keys_add_btn')}
+          </Button>
+        </div>
+        <div className={styles.keyTableShell}>
+          <div className={`${styles.keyTableHeader} ${styles.codexKeyTableHeader}`}>
+            <div className={styles.keyTableColIndex}>#</div>
+            <div className={styles.keyTableColKey}>{t('common.api_key')}</div>
+            <div className={styles.keyTableColProxy}>{t('common.proxy_url')}</div>
+            <div className={styles.keyTableColAction}>{t('common.action')}</div>
+          </div>
+          {list.map((entry, index) => (
+            <div key={index} className={`${styles.keyTableRow} ${styles.codexKeyTableRow}`}>
+              <div className={styles.keyTableColIndex}>{index + 1}</div>
+              <div className={styles.keyTableColKey}>
+                <input
+                  type="text"
+                  value={entry.apiKey}
+                  onChange={(e) => updateEntry(index, 'apiKey', e.target.value)}
+                  disabled={disableControls || saving}
+                  className={`input ${styles.keyTableInput}`}
+                  placeholder={t('ai_providers.codex_add_modal_key_placeholder')}
+                />
+              </div>
+              <div className={styles.keyTableColProxy}>
+                <input
+                  type="text"
+                  value={entry.proxyUrl ?? ''}
+                  onChange={(e) => updateEntry(index, 'proxyUrl', e.target.value)}
+                  disabled={disableControls || saving}
+                  className={`input ${styles.keyTableInput}`}
+                  placeholder={t('ai_providers.codex_add_modal_proxy_placeholder')}
+                />
+              </div>
+              <div className={styles.keyTableColAction}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeEntry(index)}
+                  disabled={disableControls || saving || list.length <= 1}
+                >
+                  {t('common.delete')}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <SecondaryScreenShell
@@ -543,13 +723,7 @@ export function AiProvidersCodexEditPage() {
         {invalidIndexParam || invalidIndex ? (
           <div className="hint">{t('common.invalid_provider_index')}</div>
         ) : (
-          <>
-            <Input
-              label={t('ai_providers.codex_add_modal_key_label')}
-              value={form.apiKey}
-              onChange={(e) => setForm((prev) => ({ ...prev, apiKey: e.target.value }))}
-              disabled={disableControls || saving}
-            />
+          <div className={styles.openaiEditForm}>
             <Input
               label={t('ai_providers.priority_label')}
               hint={t('ai_providers.priority_hint')}
@@ -590,12 +764,6 @@ export function AiProvidersCodexEditPage() {
               />
               <div className="hint">{t('ai_providers.codex_websockets_hint')}</div>
             </div>
-            <Input
-              label={t('ai_providers.codex_add_modal_proxy_label')}
-              value={form.proxyUrl ?? ''}
-              onChange={(e) => setForm((prev) => ({ ...prev, proxyUrl: e.target.value }))}
-              disabled={disableControls || saving}
-            />
             <HeaderInputList
               entries={form.headers}
               onChange={(entries) => setForm((prev) => ({ ...prev, headers: entries }))}
@@ -606,6 +774,16 @@ export function AiProvidersCodexEditPage() {
               removeButtonAriaLabel={t('common.delete')}
               disabled={disableControls || saving}
             />
+
+            <div className={styles.keyEntriesSection}>
+              <div className={styles.keyEntriesHeader}>
+                <label className={styles.keyEntriesTitle}>
+                  {t('ai_providers.codex_add_modal_keys_label')}
+                </label>
+                <span className={styles.keyEntriesHint}>{t('ai_providers.codex_keys_hint')}</span>
+              </div>
+              {renderKeyEntries(form.apiKeyEntries)}
+            </div>
 
             <div className={styles.modelConfigSection}>
               <div className={styles.modelConfigHeader}>
@@ -809,7 +987,7 @@ export function AiProvidersCodexEditPage() {
                 )}
               </div>
             </Modal>
-          </>
+          </div>
         )}
       </Card>
     </SecondaryScreenShell>

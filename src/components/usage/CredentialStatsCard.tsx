@@ -39,6 +39,13 @@ interface CredentialBucket {
   failure: number;
 }
 
+const providerApiKeyEntries = (config: ProviderKeyConfig) => {
+  if (config.apiKeyEntries?.length) {
+    return config.apiKeyEntries;
+  }
+  return config.apiKey ? [{ apiKey: config.apiKey }] : [];
+};
+
 export function CredentialStatsCard({
   usage,
   loading,
@@ -134,24 +141,22 @@ export function CredentialStatsCard({
     };
 
     // Aggregate all candidate source IDs for one provider config into a single row
-    const addConfigRow = (
-      apiKey: string,
-      prefix: string | undefined,
+    const addCandidateRow = (
+      candidates: Iterable<string>,
       name: string,
       type: string,
       rowKey: string,
     ) => {
-      const candidates = buildCandidateUsageSourceIds({ apiKey, prefix });
       let success = 0;
       let failure = 0;
-      candidates.forEach((id) => {
+      for (const id of candidates) {
         const bucket = bySource[id];
         if (bucket) {
           success += bucket.success;
           failure += bucket.failure;
           consumedSourceIds.add(id);
         }
-      });
+      }
       const total = success + failure;
       if (total > 0) {
         result.push({
@@ -166,13 +171,32 @@ export function CredentialStatsCard({
       }
     };
 
+    const addConfigRow = (
+      apiKey: string,
+      prefix: string | undefined,
+      name: string,
+      type: string,
+      rowKey: string,
+    ) => {
+      addCandidateRow(buildCandidateUsageSourceIds({ apiKey, prefix }), name, type, rowKey);
+    };
+
+    const buildProviderEntryCandidates = (config: ProviderKeyConfig) => {
+      const candidates = new Set<string>();
+      buildCandidateUsageSourceIds({ prefix: config.prefix }).forEach((id) => candidates.add(id));
+      providerApiKeyEntries(config).forEach((entry) => {
+        buildCandidateUsageSourceIds({ apiKey: entry.apiKey }).forEach((id) => candidates.add(id));
+      });
+      return candidates;
+    };
+
     // Provider rows — one row per config, stats merged across all its candidate source IDs
     geminiKeys.forEach((c, i) =>
       addConfigRow(c.apiKey, c.prefix, c.prefix?.trim() || `Gemini #${i + 1}`, 'gemini', `gemini:${i}`));
     claudeConfigs.forEach((c, i) =>
       addConfigRow(c.apiKey, c.prefix, c.prefix?.trim() || `Claude #${i + 1}`, 'claude', `claude:${i}`));
     codexConfigs.forEach((c, i) =>
-      addConfigRow(c.apiKey, c.prefix, c.prefix?.trim() || `Codex #${i + 1}`, 'codex', `codex:${i}`));
+      addCandidateRow(buildProviderEntryCandidates(c), c.prefix?.trim() || `Codex #${i + 1}`, 'codex', `codex:${i}`));
     vertexConfigs.forEach((c, i) =>
       addConfigRow(c.apiKey, c.prefix, c.prefix?.trim() || `Vertex #${i + 1}`, 'vertex', `vertex:${i}`));
     // OpenAI compatibility providers — one row per provider, merged across all apiKey entries (prefix counted once).

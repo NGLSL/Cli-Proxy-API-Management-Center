@@ -49,6 +49,7 @@ const buildEmptyForm = (): ProviderFormState => ({
   headers: [],
   models: [],
   excludedModels: [],
+  apiKeyEntries: [],
   modelEntries: [{ name: '', alias: '' }],
   excludedText: '',
 });
@@ -250,6 +251,7 @@ export function AiProvidersClaudeEditLayout() {
         headers: headersToEntries(initialData.headers),
         modelEntries: modelsToEntries(initialData.models),
         excludedText: excludedModelsToText(initialData.excludedModels),
+        apiKeyEntries: initialData.apiKeyEntries ?? [],
       };
       const available = seededForm.modelEntries.map((entry) => entry.name.trim()).filter(Boolean);
       const baseline = buildClaudeBaseline(seededForm);

@@ -2,6 +2,7 @@ import { Fragment, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { IconCheck, IconX } from '@/components/ui/icons';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import iconCodex from '@/assets/icons/codex.svg';
 import type { ProviderKeyConfig } from '@/types';
@@ -18,7 +19,13 @@ import {
 import styles from '@/pages/AiProvidersPage.module.scss';
 import { ProviderList } from '../ProviderList';
 import { ProviderStatusBar } from '../ProviderStatusBar';
-import { getStatsBySource, hasDisableAllModelsRule } from '../utils';
+import {
+  getApiKeyEntriesStats,
+  getProviderApiKeyEntries,
+  getProviderPrimaryApiKey,
+  getStatsBySource,
+  hasDisableAllModelsRule,
+} from '../utils';
 
 interface CodexSectionProps {
   configs: ProviderKeyConfig[];
@@ -52,15 +59,15 @@ export function CodexSection({
   const statusBarCache = useMemo(() => {
     const cache = new Map<string, ReturnType<typeof calculateStatusBarData>>();
 
-    configs.forEach((config) => {
-      if (!config.apiKey) return;
-      const candidates = buildCandidateUsageSourceIds({
-        apiKey: config.apiKey,
-        prefix: config.prefix,
+    configs.forEach((config, index) => {
+      const candidates = new Set<string>();
+      buildCandidateUsageSourceIds({ prefix: config.prefix }).forEach((id) => candidates.add(id));
+      getProviderApiKeyEntries(config).forEach((entry) => {
+        buildCandidateUsageSourceIds({ apiKey: entry.apiKey }).forEach((id) => candidates.add(id));
       });
-      if (!candidates.length) return;
+      if (!candidates.size) return;
       cache.set(
-        config.apiKey,
+        `${getProviderPrimaryApiKey(config)}:${index}`,
         calculateStatusBarData(collectUsageDetailsForCandidates(usageDetailsBySource, candidates))
       );
     });
@@ -86,7 +93,7 @@ export function CodexSection({
         <ProviderList<ProviderKeyConfig>
           items={configs}
           loading={loading}
-          keyField={(item) => item.apiKey}
+          keyField={(item, index) => `${getProviderPrimaryApiKey(item) || 'codex'}:${index}`}
           emptyTitle={t('ai_providers.codex_empty_title')}
           emptyDescription={t('ai_providers.codex_empty_desc')}
           onEdit={onEdit}
@@ -101,19 +108,25 @@ export function CodexSection({
               onChange={(value) => void onToggle(index, value)}
             />
           )}
-          renderContent={(item) => {
-            const stats = getStatsBySource(item.apiKey, keyStats, item.prefix);
+          renderContent={(item, index) => {
+            const apiKeyEntries = getProviderApiKeyEntries(item);
+            const stats = getApiKeyEntriesStats(apiKeyEntries, keyStats, item.prefix);
             const headerEntries = Object.entries(item.headers || {});
             const configDisabled = hasDisableAllModelsRule(item.excludedModels);
             const excludedModels = item.excludedModels ?? [];
-            const statusData = statusBarCache.get(item.apiKey) || calculateStatusBarData([]);
+            const statusData =
+              statusBarCache.get(`${getProviderPrimaryApiKey(item) || 'codex'}:${index}`) ||
+              calculateStatusBarData([]);
 
             return (
               <Fragment>
-                <div className="item-title">{t('ai_providers.codex_item_title')}</div>
-                <div className={styles.fieldRow}>
-                  <span className={styles.fieldLabel}>{t('common.api_key')}:</span>
-                  <span className={styles.fieldValue}>{maskApiKey(item.apiKey)}</span>
+                <div className="item-title">
+                  {t('ai_providers.codex_item_title')}
+                  {configDisabled && (
+                    <span className="status-badge warning">
+                      {t('ai_providers.config_disabled_badge')}
+                    </span>
+                  )}
                 </div>
                 {item.priority !== undefined && (
                   <div className={styles.fieldRow}>
@@ -133,16 +146,43 @@ export function CodexSection({
                     <span className={styles.fieldValue}>{item.baseUrl}</span>
                   </div>
                 )}
-                {item.proxyUrl && (
-                  <div className={styles.fieldRow}>
-                    <span className={styles.fieldLabel}>{t('common.proxy_url')}:</span>
-                    <span className={styles.fieldValue}>{item.proxyUrl}</span>
-                  </div>
-                )}
                 {item.websockets !== undefined && (
                   <div className={styles.fieldRow}>
                     <span className={styles.fieldLabel}>{t('ai_providers.codex_websockets_label')}:</span>
                     <span className={styles.fieldValue}>{item.websockets ? t('common.yes') : t('common.no')}</span>
+                  </div>
+                )}
+                {apiKeyEntries.length > 0 && (
+                  <div className={styles.apiKeyEntriesSection}>
+                    <div className={styles.apiKeyEntriesLabel}>
+                      {t('ai_providers.codex_keys_count')}: {apiKeyEntries.length}
+                    </div>
+                    <div className={styles.apiKeyEntryList}>
+                      {apiKeyEntries.map((entry, entryIndex) => {
+                        const entryStats = getStatsBySource(entry.apiKey, keyStats);
+                        return (
+                          <div key={entryIndex} className={styles.apiKeyEntryCard}>
+                            <span className={styles.apiKeyEntryIndex}>{entryIndex + 1}</span>
+                            <span className={styles.apiKeyEntryKey}>{maskApiKey(entry.apiKey)}</span>
+                            {entry.proxyUrl && (
+                              <span className={styles.apiKeyEntryProxy}>{entry.proxyUrl}</span>
+                            )}
+                            <div className={styles.apiKeyEntryStats}>
+                              <span
+                                className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatSuccess}`}
+                              >
+                                <IconCheck size={12} /> {entryStats.success}
+                              </span>
+                              <span
+                                className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatFailure}`}
+                              >
+                                <IconX size={12} /> {entryStats.failure}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
                 {headerEntries.length > 0 && (
@@ -152,11 +192,6 @@ export function CodexSection({
                         <strong>{key}:</strong> {value}
                       </span>
                     ))}
-                  </div>
-                )}
-                {configDisabled && (
-                  <div className="status-badge warning" style={{ marginTop: 8, marginBottom: 0 }}>
-                    {t('ai_providers.config_disabled_badge')}
                   </div>
                 )}
                 {item.models?.length ? (
