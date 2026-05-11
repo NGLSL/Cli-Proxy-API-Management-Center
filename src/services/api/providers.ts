@@ -35,6 +35,12 @@ const buildProviderDeleteQuery = (apiKey: string, baseUrl?: string) => {
   return `?${params.toString()}`;
 };
 
+const buildProviderDeleteIndexQuery = (index: number) => {
+  const params = new URLSearchParams();
+  params.set('index', String(index));
+  return `?${params.toString()}`;
+};
+
 const serializeModelAliases = (models?: ModelAlias[]) =>
   Array.isArray(models)
     ? models
@@ -65,6 +71,7 @@ const serializeApiKeyEntry = (entry: ApiKeyEntry) => {
 
 const serializeProviderKey = (config: ProviderKeyConfig, options?: { includeApiKeyEntries?: boolean }) => {
   const payload: Record<string, unknown> = { 'api-key': config.apiKey };
+  if (config.name?.trim()) payload.name = config.name.trim();
   if (options?.includeApiKeyEntries && Array.isArray(config.apiKeyEntries) && config.apiKeyEntries.length) {
     payload['api-key-entries'] = config.apiKeyEntries.map((entry) => serializeApiKeyEntry(entry));
   }
@@ -192,8 +199,10 @@ export const providersApi = {
       value: serializeProviderKey(value, { includeApiKeyEntries: true })
     }),
 
-  deleteCodexConfig: (apiKey: string, baseUrl?: string) =>
-    apiClient.delete(`/codex-api-key${buildProviderDeleteQuery(apiKey, baseUrl)}`),
+  deleteCodexConfig: (target: number | string, baseUrl?: string) =>
+    typeof target === 'number'
+      ? apiClient.delete(`/codex-api-key${buildProviderDeleteIndexQuery(target)}`)
+      : apiClient.delete(`/codex-api-key${buildProviderDeleteQuery(target, baseUrl)}`),
 
   async getClaudeConfigs(): Promise<ProviderKeyConfig[]> {
     const data = await apiClient.get('/claude-api-key');

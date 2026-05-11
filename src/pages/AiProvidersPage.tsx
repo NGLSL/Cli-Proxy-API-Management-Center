@@ -298,7 +298,7 @@ export function AiProvidersPage() {
       onConfirm: async () => {
         try {
           if (type === 'codex') {
-            await providersApi.deleteCodexConfig(getProviderPrimaryApiKey(entry), entry.baseUrl);
+            await providersApi.deleteCodexConfig(index);
             const next = codexConfigs.filter((_, idx) => idx !== index);
             setCodexConfigs(next);
             updateConfigValue('codex-api-key', next);

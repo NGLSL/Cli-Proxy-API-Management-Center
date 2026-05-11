@@ -121,7 +121,7 @@ export function CodexSection({
             return (
               <Fragment>
                 <div className="item-title">
-                  {t('ai_providers.codex_item_title')}
+                  {item.name?.trim() || t('ai_providers.codex_item_title')}
                   {configDisabled && (
                     <span className="status-badge warning">
                       {t('ai_providers.config_disabled_badge')}

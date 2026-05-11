@@ -258,6 +258,8 @@
     "codex_empty_title": "暂无Codex配置",
     "codex_empty_desc": "点击上方按钮添加第一个配置",
     "codex_item_title": "Codex配置",
+    "codex_config_name_label": "配置名称 (可选):",
+    "codex_config_name_placeholder": "例如: 主账号 / 备用账号",
     "codex_add_modal_title": "添加Codex API配置",
     "codex_add_modal_key_label": "API密钥:",
     "codex_add_modal_keys_label": "API密钥",

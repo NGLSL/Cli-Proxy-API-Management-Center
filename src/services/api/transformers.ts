@@ -132,6 +132,10 @@ const normalizeProviderKeyConfig = (item: unknown): ProviderKeyConfig | null => 
   if (apiKeyEntries.length) {
     config.apiKeyEntries = apiKeyEntries;
   }
+  const name = record?.name ?? record?.['name'];
+  if (typeof name === 'string' && name.trim()) {
+    config.name = name.trim();
+  }
   const priority = record?.priority ?? record?.['priority'];
   if (priority !== undefined && priority !== null && String(priority).trim() !== '') {
     const parsed = Number(priority);

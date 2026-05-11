@@ -30,6 +30,7 @@ type LocationState = { fromAiProviders?: boolean } | null;
 const buildEmptyForm = (): ProviderFormState => ({
   apiKey: '',
   apiKeyEntries: [buildApiKeyEntry()],
+  name: '',
   priority: undefined,
   prefix: '',
   baseUrl: '',
@@ -68,6 +69,7 @@ const normalizeModelEntries = (entries: Array<{ name: string; alias: string }>) 
 
 type CodexFormBaseline = {
   apiKeyEntries: Array<{ apiKey: string; proxyUrl: string }>;
+  name: string;
   priority: number | null;
   prefix: string;
   baseUrl: string;
@@ -79,6 +81,7 @@ type CodexFormBaseline = {
 
 const buildCodexBaseline = (form: ProviderFormState): CodexFormBaseline => ({
   apiKeyEntries: normalizeCodexApiKeyEntries(form.apiKeyEntries, form.apiKey, form.proxyUrl),
+  name: String(form.name ?? '').trim(),
   priority:
     form.priority !== undefined && Number.isFinite(form.priority) ? Math.trunc(form.priority) : null,
   prefix: String(form.prefix ?? '').trim(),
@@ -305,6 +308,7 @@ export function AiProvidersCodexEditPage() {
   );
   const isDirty =
     !areCodexApiKeyEntriesEqual(baseline.apiKeyEntries, normalizedApiKeyEntries) ||
+    baseline.name !== String(form.name ?? '').trim() ||
     baseline.priority !== normalizedPriority ||
     baseline.prefix !== String(form.prefix ?? '').trim() ||
     baseline.baseUrl !== String(form.baseUrl ?? '').trim() ||
@@ -526,9 +530,10 @@ export function AiProvidersCodexEditPage() {
     setError('');
     try {
       const payload: ProviderKeyConfig = {
-        // 顶层 api-key 只作为旧版接口和列表删除的兼容字段；实际多 key 配置写入 api-key-entries。
+        // 顶层 api-key 只作为旧版接口和旧配置格式的兼容字段；实际多 key 配置写入 api-key-entries。
         apiKey: apiKeyEntries[0]?.apiKey ?? '',
         apiKeyEntries,
+        name: form.name?.trim() || undefined,
         priority: form.priority !== undefined ? Math.trunc(form.priority) : undefined,
         prefix: form.prefix?.trim() || undefined,
         baseUrl,
@@ -724,6 +729,13 @@ export function AiProvidersCodexEditPage() {
           <div className="hint">{t('common.invalid_provider_index')}</div>
         ) : (
           <div className={styles.openaiEditForm}>
+            <Input
+              label={t('ai_providers.codex_config_name_label')}
+              placeholder={t('ai_providers.codex_config_name_placeholder')}
+              value={form.name ?? ''}
+              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+              disabled={disableControls || saving}
+            />
             <Input
               label={t('ai_providers.priority_label')}
               hint={t('ai_providers.priority_hint')}

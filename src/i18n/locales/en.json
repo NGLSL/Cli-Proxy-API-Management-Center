@@ -258,6 +258,8 @@
     "codex_empty_title": "No Codex Configuration",
     "codex_empty_desc": "Click the button above to add the first configuration",
     "codex_item_title": "Codex Configuration",
+    "codex_config_name_label": "Configuration Name (Optional):",
+    "codex_config_name_placeholder": "e.g.: Primary account / Backup account",
     "codex_add_modal_title": "Add Codex API Configuration",
     "codex_add_modal_key_label": "API Key:",
     "codex_add_modal_keys_label": "API Keys",
