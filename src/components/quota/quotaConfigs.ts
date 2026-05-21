@@ -307,6 +307,7 @@ const normalizeClaudePlanTypeFromCache = (value: unknown): string | null => {
   if (!normalized) return null;
   if (normalized === 'max' || normalized === 'plan_max') return 'plan_max';
   if (normalized === 'pro' || normalized === 'plan_pro') return 'plan_pro';
+  if (normalized === 'team' || normalized === 'plan_team') return 'plan_team';
   if (normalized === 'free' || normalized === 'plan_free') return 'plan_free';
   return normalized.startsWith('plan_') ? normalized : null;
 };
@@ -1309,6 +1310,13 @@ const resolveClaudePlanType = (profile: ClaudeProfileResponse | null): string | 
 
   const hasClaudePro = normalizeFlagValue(profile.account?.has_claude_pro);
   if (hasClaudePro) return 'plan_pro';
+
+  const organizationType = normalizeStringValue(profile.organization?.organization_type)?.toLowerCase();
+  const subscriptionStatus = normalizeStringValue(profile.organization?.subscription_status)?.toLowerCase();
+
+  if (organizationType === 'claude_team' && subscriptionStatus === 'active') {
+    return 'plan_team';
+  }
 
   if (hasClaudeMax === false && hasClaudePro === false) return 'plan_free';
 
