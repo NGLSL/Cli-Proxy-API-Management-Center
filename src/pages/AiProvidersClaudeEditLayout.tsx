@@ -251,7 +251,7 @@ export function AiProvidersClaudeEditLayout() {
         headers: headersToEntries(initialData.headers),
         modelEntries: modelsToEntries(initialData.models),
         excludedText: excludedModelsToText(initialData.excludedModels),
-        apiKeyEntries: initialData.apiKeyEntries ?? [],
+        apiKeyEntries: [],
       };
       const available = seededForm.modelEntries.map((entry) => entry.name.trim()).filter(Boolean);
       const baseline = buildClaudeBaseline(seededForm);

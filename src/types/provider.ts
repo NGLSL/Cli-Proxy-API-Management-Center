@@ -35,8 +35,7 @@ export interface GeminiKeyConfig {
 
 export interface ProviderKeyConfig {
   apiKey: string;
-  apiKeyEntries?: ApiKeyEntry[];
-  name?: string;
+  disableCooling?: boolean;
   priority?: number;
   prefix?: string;
   baseUrl?: string;

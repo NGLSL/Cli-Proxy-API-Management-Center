@@ -273,6 +273,8 @@
     "codex_keys_count": "密钥数量",
     "codex_websockets_label": "Websockets",
     "codex_websockets_hint": "开启 Responses API 的 websocket 传输。",
+    "codex_disable_cooling_label": "禁用冷却",
+    "codex_disable_cooling_hint": "开启后该密钥在轮询中不会被冷却，适合不限制并发的密钥。",
     "codex_models_label": "自定义模型 (可选):",
     "codex_models_hint": "为空表示使用全部模型；可填写 name[, alias] 以限制或重命名模型。",
     "codex_models_add_btn": "添加模型",

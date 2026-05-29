@@ -144,15 +144,8 @@ export const getApiKeyEntriesStats = (
 export const getOpenAIProviderStats = getApiKeyEntriesStats;
 
 export const getProviderApiKeyEntries = (
-  config?: Pick<ProviderKeyConfig, 'apiKey' | 'apiKeyEntries' | 'proxyUrl'>
+  config?: Pick<ProviderKeyConfig, 'apiKey' | 'proxyUrl'>
 ): ApiKeyEntry[] => {
-  const sharedProxyUrl = String(config?.proxyUrl ?? '').trim();
-  if (config?.apiKeyEntries?.length) {
-    return config.apiKeyEntries.map((entry) => ({
-      ...entry,
-      proxyUrl: String(entry?.proxyUrl ?? '').trim() || sharedProxyUrl,
-    }));
-  }
   const apiKey = String(config?.apiKey ?? '').trim();
   if (!apiKey) {
     return [];
@@ -161,10 +154,9 @@ export const getProviderApiKeyEntries = (
 };
 
 export const getProviderPrimaryApiKey = (
-  config?: Pick<ProviderKeyConfig, 'apiKey' | 'apiKeyEntries' | 'proxyUrl'>
+  config?: Pick<ProviderKeyConfig, 'apiKey' | 'proxyUrl'>
 ): string => {
-  const entries = getProviderApiKeyEntries(config);
-  return entries[0]?.apiKey ?? String(config?.apiKey ?? '').trim();
+  return String(config?.apiKey ?? '').trim();
 };
 
 export const buildApiKeyEntry = (input?: Partial<ApiKeyEntry>): ApiKeyEntry => ({

@@ -40,9 +40,6 @@ interface CredentialBucket {
 }
 
 const providerApiKeyEntries = (config: ProviderKeyConfig) => {
-  if (config.apiKeyEntries?.length) {
-    return config.apiKeyEntries;
-  }
   return config.apiKey ? [{ apiKey: config.apiKey }] : [];
 };
 

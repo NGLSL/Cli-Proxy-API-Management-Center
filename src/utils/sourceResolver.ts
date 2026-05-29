@@ -3,9 +3,6 @@ import type { CredentialInfo, SourceInfo } from '@/types/sourceInfo';
 import { buildCandidateUsageSourceIds, normalizeAuthIndex } from '@/utils/usage';
 
 const providerApiKeyEntries = (item: ProviderKeyConfig) => {
-  if (item.apiKeyEntries?.length) {
-    return item.apiKeyEntries;
-  }
   return item.apiKey ? [{ apiKey: item.apiKey }] : [];
 };
 
@@ -50,7 +47,7 @@ export function buildSourceInfoMap(input: SourceInfoMapInput): Map<string, Sourc
     });
   });
 
-  // Codex 支持同一配置块下的多 apiKeyEntries，来源归因需要把这些 key 聚合到同一个展示名。
+  // Codex — 单 key 模式，来源归因聚合 apiKey 和 prefix 候选 ID。
   (input.codexApiKeys || []).forEach((item, index) => {
     const displayName = item.prefix?.trim() || `Codex #${index + 1}`;
     const candidates = new Set<string>();

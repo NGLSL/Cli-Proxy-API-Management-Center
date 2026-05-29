@@ -2,7 +2,6 @@ import { Fragment, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { IconCheck, IconX } from '@/components/ui/icons';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import iconCodex from '@/assets/icons/codex.svg';
 import type { ProviderKeyConfig } from '@/types';
@@ -20,9 +19,6 @@ import styles from '@/pages/AiProvidersPage.module.scss';
 import { ProviderList } from '../ProviderList';
 import { ProviderStatusBar } from '../ProviderStatusBar';
 import {
-  getApiKeyEntriesStats,
-  getProviderApiKeyEntries,
-  getProviderPrimaryApiKey,
   getStatsBySource,
   hasDisableAllModelsRule,
 } from '../utils';
@@ -62,12 +58,10 @@ export function CodexSection({
     configs.forEach((config, index) => {
       const candidates = new Set<string>();
       buildCandidateUsageSourceIds({ prefix: config.prefix }).forEach((id) => candidates.add(id));
-      getProviderApiKeyEntries(config).forEach((entry) => {
-        buildCandidateUsageSourceIds({ apiKey: entry.apiKey }).forEach((id) => candidates.add(id));
-      });
+      buildCandidateUsageSourceIds({ apiKey: config.apiKey }).forEach((id) => candidates.add(id));
       if (!candidates.size) return;
       cache.set(
-        `${getProviderPrimaryApiKey(config)}:${index}`,
+        `${config.apiKey}:${index}`,
         calculateStatusBarData(collectUsageDetailsForCandidates(usageDetailsBySource, candidates))
       );
     });
@@ -93,7 +87,7 @@ export function CodexSection({
         <ProviderList<ProviderKeyConfig>
           items={configs}
           loading={loading}
-          keyField={(item, index) => `${getProviderPrimaryApiKey(item) || 'codex'}:${index}`}
+          keyField={(item, index) => `${item.apiKey || 'codex'}:${index}`}
           emptyTitle={t('ai_providers.codex_empty_title')}
           emptyDescription={t('ai_providers.codex_empty_desc')}
           onEdit={onEdit}
@@ -109,19 +103,18 @@ export function CodexSection({
             />
           )}
           renderContent={(item, index) => {
-            const apiKeyEntries = getProviderApiKeyEntries(item);
-            const stats = getApiKeyEntriesStats(apiKeyEntries, keyStats, item.prefix);
+            const stats = getStatsBySource(item.apiKey, keyStats, item.prefix);
             const headerEntries = Object.entries(item.headers || {});
             const configDisabled = hasDisableAllModelsRule(item.excludedModels);
             const excludedModels = item.excludedModels ?? [];
             const statusData =
-              statusBarCache.get(`${getProviderPrimaryApiKey(item) || 'codex'}:${index}`) ||
+              statusBarCache.get(`${item.apiKey || 'codex'}:${index}`) ||
               calculateStatusBarData([]);
 
             return (
               <Fragment>
                 <div className="item-title">
-                  {item.name?.trim() || t('ai_providers.codex_item_title')}
+                  {t('ai_providers.codex_item_title')}
                   {configDisabled && (
                     <span className="status-badge warning">
                       {t('ai_providers.config_disabled_badge')}
@@ -152,37 +145,22 @@ export function CodexSection({
                     <span className={styles.fieldValue}>{item.websockets ? t('common.yes') : t('common.no')}</span>
                   </div>
                 )}
-                {apiKeyEntries.length > 0 && (
-                  <div className={styles.apiKeyEntriesSection}>
-                    <div className={styles.apiKeyEntriesLabel}>
-                      {t('ai_providers.codex_keys_count')}: {apiKeyEntries.length}
-                    </div>
-                    <div className={styles.apiKeyEntryList}>
-                      {apiKeyEntries.map((entry, entryIndex) => {
-                        const entryStats = getStatsBySource(entry.apiKey, keyStats);
-                        return (
-                          <div key={entryIndex} className={styles.apiKeyEntryCard}>
-                            <span className={styles.apiKeyEntryIndex}>{entryIndex + 1}</span>
-                            <span className={styles.apiKeyEntryKey}>{maskApiKey(entry.apiKey)}</span>
-                            {entry.proxyUrl && (
-                              <span className={styles.apiKeyEntryProxy}>{entry.proxyUrl}</span>
-                            )}
-                            <div className={styles.apiKeyEntryStats}>
-                              <span
-                                className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatSuccess}`}
-                              >
-                                <IconCheck size={12} /> {entryStats.success}
-                              </span>
-                              <span
-                                className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatFailure}`}
-                              >
-                                <IconX size={12} /> {entryStats.failure}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                {item.apiKey && (
+                  <div className={styles.fieldRow}>
+                    <span className={styles.fieldLabel}>{t('ai_providers.codex_api_key_label')}:</span>
+                    <span className={styles.fieldValue}>{maskApiKey(item.apiKey)}</span>
+                  </div>
+                )}
+                {item.proxyUrl && (
+                  <div className={styles.fieldRow}>
+                    <span className={styles.fieldLabel}>{t('common.proxy_url')}:</span>
+                    <span className={styles.fieldValue}>{item.proxyUrl}</span>
+                  </div>
+                )}
+                {item.disableCooling !== undefined && (
+                  <div className={styles.fieldRow}>
+                    <span className={styles.fieldLabel}>{t('ai_providers.codex_disable_cooling_label')}:</span>
+                    <span className={styles.fieldValue}>{item.disableCooling ? t('common.yes') : t('common.no')}</span>
                   </div>
                 )}
                 {headerEntries.length > 0 && (

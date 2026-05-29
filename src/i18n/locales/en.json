@@ -273,6 +273,8 @@
     "codex_keys_count": "Keys Count",
     "codex_websockets_label": "Websockets",
     "codex_websockets_hint": "Enable Responses API websocket transport for this key.",
+    "codex_disable_cooling_label": "Disable Cooling",
+    "codex_disable_cooling_hint": "When enabled, this key will not be cooled down in round-robin scheduling. Suitable for keys with no concurrency limits.",
     "codex_models_label": "Custom Models (Optional):",
     "codex_models_hint": "Leave empty to allow all models, or add name[, alias] entries to limit/alias them.",
     "codex_models_add_btn": "Add Model",

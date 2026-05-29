@@ -18,27 +18,39 @@ import type { ProviderKeyConfig } from '@/types';
 import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
 import { areKeyValueEntriesEqual, areModelEntriesEqual, areStringArraysEqual } from '@/utils/compare';
 import { entriesToModels, modelsToEntries } from '@/components/ui/modelInputListUtils';
-import { buildApiKeyEntry, excludedModelsToText, parseExcludedModels } from '@/components/providers/utils';
-import type { ProviderFormState } from '@/components/providers';
-import type { ApiKeyEntry } from '@/types';
+import { excludedModelsToText, parseExcludedModels } from '@/components/providers/utils';
 import type { ModelInfo } from '@/utils/models';
 import layoutStyles from './AiProvidersEditLayout.module.scss';
 import styles from './AiProvidersPage.module.scss';
 
 type LocationState = { fromAiProviders?: boolean } | null;
 
-const buildEmptyForm = (): ProviderFormState => ({
+/**
+ * Codex 编辑页的表单状态（单 key 模式，不含 apiKeyEntries/name）。
+ * ProviderFormState 中 apiKeyEntries/name 字段不再使用。
+ */
+interface CodexFormState {
+  apiKey: string;
+  disableCooling: boolean;
+  priority: number | undefined;
+  prefix: string;
+  baseUrl: string;
+  websockets: boolean;
+  proxyUrl: string;
+  headers: Array<{ key: string; value: string }>;
+  modelEntries: Array<{ name: string; alias: string }>;
+  excludedText: string;
+}
+
+const buildEmptyForm = (): CodexFormState => ({
   apiKey: '',
-  apiKeyEntries: [buildApiKeyEntry()],
-  name: '',
+  disableCooling: false,
   priority: undefined,
   prefix: '',
   baseUrl: '',
   websockets: false,
   proxyUrl: '',
   headers: [],
-  models: [],
-  excludedModels: [],
   modelEntries: [{ name: '', alias: '' }],
   excludedText: '',
 });
@@ -67,88 +79,35 @@ const normalizeModelEntries = (entries: Array<{ name: string; alias: string }>) 
     return acc;
   }, []);
 
+/**
+ * 用于 isDirty 比较的 baseline 快照，字段全部为已规范化后的值。
+ */
 type CodexFormBaseline = {
-  apiKeyEntries: Array<{ apiKey: string; proxyUrl: string }>;
-  name: string;
+  apiKey: string;
+  disableCooling: boolean;
   priority: number | null;
   prefix: string;
   baseUrl: string;
   websockets: boolean;
+  proxyUrl: string;
   headers: ReturnType<typeof normalizeHeaderEntries>;
   models: ReturnType<typeof normalizeModelEntries>;
   excludedModels: string[];
 };
 
-const buildCodexBaseline = (form: ProviderFormState): CodexFormBaseline => ({
-  apiKeyEntries: normalizeCodexApiKeyEntries(form.apiKeyEntries, form.apiKey, form.proxyUrl),
-  name: String(form.name ?? '').trim(),
+const buildCodexBaseline = (form: CodexFormState): CodexFormBaseline => ({
+  apiKey: String(form.apiKey ?? '').trim(),
+  disableCooling: Boolean(form.disableCooling),
   priority:
     form.priority !== undefined && Number.isFinite(form.priority) ? Math.trunc(form.priority) : null,
   prefix: String(form.prefix ?? '').trim(),
   baseUrl: String(form.baseUrl ?? '').trim(),
   websockets: Boolean(form.websockets),
+  proxyUrl: String(form.proxyUrl ?? '').trim(),
   headers: normalizeHeaderEntries(form.headers),
   models: normalizeModelEntries(form.modelEntries),
   excludedModels: parseExcludedModels(form.excludedText ?? ''),
 });
-
-const normalizeCodexApiKeyEntries = (
-  entries: ApiKeyEntry[] | undefined,
-  legacyApiKey?: string,
-  legacyProxyUrl?: string
-) => {
-  const sourceEntries = Array.isArray(entries) && entries.length > 0
-    ? entries
-    : legacyApiKey
-      ? [buildApiKeyEntry({ apiKey: legacyApiKey, proxyUrl: legacyProxyUrl ?? '' })]
-      : [];
-  const seen = new Set<string>();
-  return sourceEntries.reduce<Array<{ apiKey: string; proxyUrl: string }>>((acc, entry) => {
-    const apiKey = String(entry?.apiKey ?? '').trim();
-    const proxyUrl = String(entry?.proxyUrl ?? '').trim();
-    if (!apiKey) return acc;
-    const key = `${apiKey}\u0000${proxyUrl}`;
-    if (seen.has(key)) return acc;
-    seen.add(key);
-    acc.push({ apiKey, proxyUrl });
-    return acc;
-  }, []);
-};
-
-const areCodexApiKeyEntriesEqual = (
-  a: Array<{ apiKey: string; proxyUrl: string }>,
-  b: Array<{ apiKey: string; proxyUrl: string }>
-) =>
-  a.length === b.length &&
-  a.every((entry, index) => entry.apiKey === b[index]?.apiKey && entry.proxyUrl === b[index]?.proxyUrl);
-
-const buildCodexApiKeyEntryPayload = (form: ProviderFormState): ApiKeyEntry[] => {
-  const sourceEntries = Array.isArray(form.apiKeyEntries) && form.apiKeyEntries.length > 0
-    ? form.apiKeyEntries
-    : form.apiKey
-      ? [buildApiKeyEntry({ apiKey: form.apiKey, proxyUrl: form.proxyUrl ?? '' })]
-      : [];
-  const seen = new Set<string>();
-  return sourceEntries.reduce<ApiKeyEntry[]>((acc, entry) => {
-    const apiKey = String(entry?.apiKey ?? '').trim();
-    const proxyUrl = String(entry?.proxyUrl ?? '').trim();
-    if (!apiKey) return acc;
-    const uniqueKey = `${apiKey}\u0000${proxyUrl}`;
-    if (seen.has(uniqueKey)) return acc;
-    seen.add(uniqueKey);
-
-    const normalizedEntry: ApiKeyEntry = { apiKey };
-    if (proxyUrl) {
-      normalizedEntry.proxyUrl = proxyUrl;
-    }
-    const headers = buildHeaderObject(entry?.headers);
-    if (Object.keys(headers).length > 0) {
-      normalizedEntry.headers = headers;
-    }
-    acc.push(normalizedEntry);
-    return acc;
-  }, []);
-};
 
 export function AiProvidersCodexEditPage() {
   const { t } = useTranslation();
@@ -168,7 +127,7 @@ export function AiProvidersCodexEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState<ProviderFormState>(() => buildEmptyForm());
+  const [form, setForm] = useState<CodexFormState>(() => buildEmptyForm());
   const [baseline, setBaseline] = useState(() => buildCodexBaseline(buildEmptyForm()));
 
   const [modelDiscoveryOpen, setModelDiscoveryOpen] = useState(false);
@@ -243,22 +202,19 @@ export function AiProvidersCodexEditPage() {
     };
   }, [fetchConfig, t]);
 
+  // 当 initialData 变化时，将配置填充到表单（编辑模式）或重置为空表单（新增模式）
   useEffect(() => {
     if (loading) return;
 
     if (initialData) {
-      const sharedProxyUrl = String(initialData.proxyUrl ?? '').trim();
-      const apiKeyEntries = initialData.apiKeyEntries?.length
-        ? initialData.apiKeyEntries.map((entry) => ({
-            ...entry,
-            proxyUrl: String(entry?.proxyUrl ?? '').trim() || sharedProxyUrl,
-          }))
-        : [buildApiKeyEntry({ apiKey: initialData.apiKey, proxyUrl: sharedProxyUrl })];
-      const nextForm: ProviderFormState = {
-        ...initialData,
-        apiKey: apiKeyEntries[0]?.apiKey ?? initialData.apiKey ?? '',
-        apiKeyEntries,
+      const nextForm: CodexFormState = {
+        apiKey: initialData.apiKey ?? '',
+        disableCooling: Boolean(initialData.disableCooling),
+        priority: initialData.priority,
+        prefix: initialData.prefix ?? '',
+        baseUrl: initialData.baseUrl ?? '',
         websockets: Boolean(initialData.websockets),
+        proxyUrl: initialData.proxyUrl ?? '',
         headers: headersToEntries(initialData.headers),
         modelEntries: modelsToEntries(initialData.models),
         excludedText: excludedModelsToText(initialData.excludedModels),
@@ -276,14 +232,6 @@ export function AiProvidersCodexEditPage() {
   const normalizedModels = useMemo(
     () => normalizeModelEntries(form.modelEntries),
     [form.modelEntries]
-  );
-  const normalizedApiKeyEntries = useMemo(
-    () => normalizeCodexApiKeyEntries(form.apiKeyEntries, form.apiKey, form.proxyUrl),
-    [form.apiKey, form.apiKeyEntries, form.proxyUrl]
-  );
-  const firstModelDiscoveryApiKey = useMemo(
-    () => normalizedApiKeyEntries[0]?.apiKey ?? '',
-    [normalizedApiKeyEntries]
   );
   const normalizedExcludedModels = useMemo(
     () => parseExcludedModels(form.excludedText ?? ''),
@@ -307,12 +255,13 @@ export function AiProvidersCodexEditPage() {
     [baseline.excludedModels, normalizedExcludedModels]
   );
   const isDirty =
-    !areCodexApiKeyEntriesEqual(baseline.apiKeyEntries, normalizedApiKeyEntries) ||
-    baseline.name !== String(form.name ?? '').trim() ||
+    baseline.apiKey !== String(form.apiKey ?? '').trim() ||
+    baseline.disableCooling !== Boolean(form.disableCooling) ||
     baseline.priority !== normalizedPriority ||
     baseline.prefix !== String(form.prefix ?? '').trim() ||
     baseline.baseUrl !== String(form.baseUrl ?? '').trim() ||
     baseline.websockets !== Boolean(form.websockets) ||
+    baseline.proxyUrl !== String(form.proxyUrl ?? '').trim() ||
     isHeadersDirty ||
     isModelsDirty ||
     isExcludedModelsDirty;
@@ -403,7 +352,7 @@ export function AiProvidersCodexEditPage() {
       const hasCustomAuthorization = Object.keys(headerObject).some(
         (key) => key.toLowerCase() === 'authorization'
       );
-      const apiKey = firstModelDiscoveryApiKey || undefined;
+      const apiKey = form.apiKey?.trim() || undefined;
       const list = await modelsApi.fetchV1ModelsViaApiCall(
         form.baseUrl ?? '',
         hasCustomAuthorization ? undefined : apiKey,
@@ -421,7 +370,7 @@ export function AiProvidersCodexEditPage() {
         setModelDiscoveryFetching(false);
       }
     }
-  }, [firstModelDiscoveryApiKey, form.baseUrl, form.headers, t]);
+  }, [form.apiKey, form.baseUrl, form.headers, t]);
 
   useEffect(() => {
     if (!modelDiscoveryOpen) {
@@ -444,7 +393,7 @@ export function AiProvidersCodexEditPage() {
     const hasCustomAuthorization = Object.keys(headerObject).some(
       (key) => key.toLowerCase() === 'authorization'
     );
-    const hasApiKeyField = Boolean(firstModelDiscoveryApiKey);
+    const hasApiKeyField = Boolean(form.apiKey?.trim());
     const canAutoFetch = hasApiKeyField || hasCustomAuthorization;
 
     if (!canAutoFetch) return;
@@ -453,12 +402,12 @@ export function AiProvidersCodexEditPage() {
       .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
       .map(([key, value]) => `${key}:${value}`)
       .join('|');
-    const signature = `${nextEndpoint}||${firstModelDiscoveryApiKey}||${headerSignature}`;
+    const signature = `${nextEndpoint}||${form.apiKey?.trim()}||${headerSignature}`;
     if (autoFetchSignatureRef.current === signature) return;
     autoFetchSignatureRef.current = signature;
 
     void fetchCodexModelDiscovery();
-  }, [fetchCodexModelDiscovery, firstModelDiscoveryApiKey, form.baseUrl, form.headers, modelDiscoveryOpen]);
+  }, [fetchCodexModelDiscovery, form.apiKey, form.baseUrl, form.headers, modelDiscoveryOpen]);
 
   useEffect(() => {
     const availableNames = new Set(discoveredModels.map((model) => model.name));
@@ -513,31 +462,26 @@ export function AiProvidersCodexEditPage() {
   const handleSave = useCallback(async () => {
     if (!canSave) return;
 
-    const trimmedBaseUrl = (form.baseUrl ?? '').trim();
-    const baseUrl = trimmedBaseUrl || undefined;
-    if (!baseUrl) {
-      showNotification(t('notification.codex_base_url_required'), 'error');
-      return;
-    }
-
-    const apiKeyEntries = buildCodexApiKeyEntryPayload(form);
-    if (apiKeyEntries.length === 0) {
+    const trimmedApiKey = (form.apiKey ?? '').trim();
+    if (!trimmedApiKey) {
       showNotification(t('notification.codex_key_required'), 'error');
       return;
     }
+
+    const trimmedBaseUrl = (form.baseUrl ?? '').trim();
+    const baseUrl = trimmedBaseUrl || undefined;
 
     setSaving(true);
     setError('');
     try {
       const payload: ProviderKeyConfig = {
-        // 顶层 api-key 只作为旧版接口和旧配置格式的兼容字段；实际多 key 配置写入 api-key-entries。
-        apiKey: apiKeyEntries[0]?.apiKey ?? '',
-        apiKeyEntries,
-        name: form.name?.trim() || undefined,
+        apiKey: trimmedApiKey,
+        disableCooling: form.disableCooling || undefined,
         priority: form.priority !== undefined ? Math.trunc(form.priority) : undefined,
         prefix: form.prefix?.trim() || undefined,
         baseUrl,
         websockets: Boolean(form.websockets),
+        proxyUrl: form.proxyUrl?.trim() || undefined,
         headers: buildHeaderObject(form.headers),
         models: entriesToModels(form.modelEntries),
         excludedModels: parseExcludedModels(form.excludedText),
@@ -558,7 +502,7 @@ export function AiProvidersCodexEditPage() {
         'success'
       );
       allowNextNavigation();
-      setBaseline(buildCodexBaseline({ ...form, apiKey: payload.apiKey, apiKeyEntries, proxyUrl: '' }));
+      setBaseline(buildCodexBaseline({ ...form, apiKey: trimmedApiKey }));
       handleBack();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
@@ -589,105 +533,6 @@ export function AiProvidersCodexEditPage() {
     Boolean((form.baseUrl ?? '').trim());
   const canApplyModelDiscovery =
     !disableControls && !saving && !modelDiscoveryFetching && modelDiscoverySelected.size > 0;
-
-  const renderKeyEntries = (entries: ApiKeyEntry[]) => {
-    const list = entries.length ? entries : [buildApiKeyEntry()];
-
-    const updateEntry = (idx: number, field: keyof ApiKeyEntry, value: string) => {
-      const next = list.map((entry, i) => (i === idx ? { ...entry, [field]: value } : entry));
-      const firstKey = next.find((entry) => String(entry?.apiKey ?? '').trim())?.apiKey ?? '';
-      setForm((prev) => ({
-        ...prev,
-        apiKey: firstKey,
-        apiKeyEntries: next,
-        proxyUrl: '',
-      }));
-    };
-
-    const removeEntry = (idx: number) => {
-      const next = list.filter((_, i) => i !== idx);
-      const nextEntries = next.length ? next : [buildApiKeyEntry()];
-      const firstKey = nextEntries.find((entry) => String(entry?.apiKey ?? '').trim())?.apiKey ?? '';
-      setForm((prev) => ({
-        ...prev,
-        apiKey: firstKey,
-        apiKeyEntries: nextEntries,
-        proxyUrl: '',
-      }));
-    };
-
-    const addEntry = () => {
-      const defaultProxyUrl = list.find((entry) => String(entry?.proxyUrl ?? '').trim())?.proxyUrl ?? '';
-      const next = [...list, buildApiKeyEntry({ proxyUrl: defaultProxyUrl })];
-      setForm((prev) => ({
-        ...prev,
-        apiKeyEntries: next,
-        proxyUrl: '',
-      }));
-    };
-
-    return (
-      <div className={styles.keyEntriesList}>
-        <div className={styles.keyEntriesToolbar}>
-          <span className={styles.keyEntriesCount}>
-            {t('ai_providers.codex_keys_count')}: {list.length}
-          </span>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={addEntry}
-            disabled={disableControls || saving}
-            className={styles.addKeyButton}
-          >
-            {t('ai_providers.codex_keys_add_btn')}
-          </Button>
-        </div>
-        <div className={styles.keyTableShell}>
-          <div className={`${styles.keyTableHeader} ${styles.codexKeyTableHeader}`}>
-            <div className={styles.keyTableColIndex}>#</div>
-            <div className={styles.keyTableColKey}>{t('common.api_key')}</div>
-            <div className={styles.keyTableColProxy}>{t('common.proxy_url')}</div>
-            <div className={styles.keyTableColAction}>{t('common.action')}</div>
-          </div>
-          {list.map((entry, index) => (
-            <div key={index} className={`${styles.keyTableRow} ${styles.codexKeyTableRow}`}>
-              <div className={styles.keyTableColIndex}>{index + 1}</div>
-              <div className={styles.keyTableColKey}>
-                <input
-                  type="text"
-                  value={entry.apiKey}
-                  onChange={(e) => updateEntry(index, 'apiKey', e.target.value)}
-                  disabled={disableControls || saving}
-                  className={`input ${styles.keyTableInput}`}
-                  placeholder={t('ai_providers.codex_add_modal_key_placeholder')}
-                />
-              </div>
-              <div className={styles.keyTableColProxy}>
-                <input
-                  type="text"
-                  value={entry.proxyUrl ?? ''}
-                  onChange={(e) => updateEntry(index, 'proxyUrl', e.target.value)}
-                  disabled={disableControls || saving}
-                  className={`input ${styles.keyTableInput}`}
-                  placeholder={t('ai_providers.codex_add_modal_proxy_placeholder')}
-                />
-              </div>
-              <div className={styles.keyTableColAction}>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => removeEntry(index)}
-                  disabled={disableControls || saving || list.length <= 1}
-                >
-                  {t('common.delete')}
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
 
   return (
     <SecondaryScreenShell
@@ -730,10 +575,10 @@ export function AiProvidersCodexEditPage() {
         ) : (
           <div className={styles.openaiEditForm}>
             <Input
-              label={t('ai_providers.codex_config_name_label')}
-              placeholder={t('ai_providers.codex_config_name_placeholder')}
-              value={form.name ?? ''}
-              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+              label={t('ai_providers.codex_add_modal_key_label')}
+              placeholder={t('ai_providers.codex_add_modal_key_placeholder')}
+              value={form.apiKey}
+              onChange={(e) => setForm((prev) => ({ ...prev, apiKey: e.target.value }))}
               disabled={disableControls || saving}
             />
             <Input
@@ -776,6 +621,23 @@ export function AiProvidersCodexEditPage() {
               />
               <div className="hint">{t('ai_providers.codex_websockets_hint')}</div>
             </div>
+            <Input
+              label={t('common.proxy_url')}
+              placeholder={t('ai_providers.codex_add_modal_proxy_placeholder')}
+              value={form.proxyUrl ?? ''}
+              onChange={(e) => setForm((prev) => ({ ...prev, proxyUrl: e.target.value }))}
+              disabled={disableControls || saving}
+            />
+            <div className="form-group">
+              <label>{t('ai_providers.codex_disable_cooling_label')}</label>
+              <ToggleSwitch
+                checked={Boolean(form.disableCooling)}
+                onChange={(value) => setForm((prev) => ({ ...prev, disableCooling: value }))}
+                disabled={disableControls || saving}
+                ariaLabel={t('ai_providers.codex_disable_cooling_label')}
+              />
+              <div className="hint">{t('ai_providers.codex_disable_cooling_hint')}</div>
+            </div>
             <HeaderInputList
               entries={form.headers}
               onChange={(entries) => setForm((prev) => ({ ...prev, headers: entries }))}
@@ -786,16 +648,6 @@ export function AiProvidersCodexEditPage() {
               removeButtonAriaLabel={t('common.delete')}
               disabled={disableControls || saving}
             />
-
-            <div className={styles.keyEntriesSection}>
-              <div className={styles.keyEntriesHeader}>
-                <label className={styles.keyEntriesTitle}>
-                  {t('ai_providers.codex_add_modal_keys_label')}
-                </label>
-                <span className={styles.keyEntriesHint}>{t('ai_providers.codex_keys_hint')}</span>
-              </div>
-              {renderKeyEntries(form.apiKeyEntries)}
-            </div>
 
             <div className={styles.modelConfigSection}>
               <div className={styles.modelConfigHeader}>
@@ -831,18 +683,12 @@ export function AiProvidersCodexEditPage() {
               <ModelInputList
                 entries={form.modelEntries}
                 onChange={(entries) => setForm((prev) => ({ ...prev, modelEntries: entries }))}
-                namePlaceholder={t('common.model_name_placeholder')}
-                aliasPlaceholder={t('common.model_alias_placeholder')}
-                disabled={disableControls || saving}
-                hideAddButton
-                className={styles.modelInputList}
-                rowClassName={styles.modelInputRow}
-                inputClassName={styles.modelInputField}
-                removeButtonClassName={styles.modelRowRemoveButton}
+                addLabel={t('ai_providers.codex_models_add_btn')}
                 removeButtonTitle={t('common.delete')}
-                removeButtonAriaLabel={t('common.delete')}
+                disabled={disableControls || saving}
               />
             </div>
+
             <div className="form-group">
               <label>{t('ai_providers.excluded_models_label')}</label>
               <textarea
@@ -858,16 +704,14 @@ export function AiProvidersCodexEditPage() {
 
             <Modal
               open={modelDiscoveryOpen}
-              title={t('ai_providers.codex_models_fetch_title')}
               onClose={() => setModelDiscoveryOpen(false)}
-              width={720}
+              title={t('ai_providers.codex_models_fetch_modal_title')}
               footer={
-                <>
+                <div className={layoutStyles.modalFooter}>
                   <Button
                     variant="secondary"
                     size="sm"
                     onClick={() => setModelDiscoveryOpen(false)}
-                    disabled={modelDiscoveryFetching}
                   >
                     {t('common.cancel')}
                   </Button>
@@ -876,25 +720,19 @@ export function AiProvidersCodexEditPage() {
                     onClick={handleApplyDiscoveredModels}
                     disabled={!canApplyModelDiscovery}
                   >
-                    {t('ai_providers.codex_models_fetch_apply')}
+                    {t('ai_providers.model_discovery_apply', {
+                      count: modelDiscoverySelected.size,
+                    })}
                   </Button>
-                </>
+                </div>
               }
             >
-              <div className={styles.openaiModelsContent}>
-                <div className={styles.sectionHint}>
-                  {t('ai_providers.codex_models_fetch_hint')}
-                </div>
-                <div className={styles.openaiModelsEndpointSection}>
-                  <label className={styles.openaiModelsEndpointLabel}>
-                    {t('ai_providers.codex_models_fetch_url_label')}
-                  </label>
-                  <div className={styles.openaiModelsEndpointControls}>
-                    <input
-                      className={`input ${styles.openaiModelsEndpointInput}`}
-                      readOnly
-                      value={modelDiscoveryEndpoint}
-                    />
+              <div className={styles.modelDiscoveryContent}>
+                <div className={styles.modelDiscoveryMeta}>
+                  <span className={styles.modelDiscoveryEndpoint}>
+                    {modelDiscoveryEndpoint || t('ai_providers.codex_models_fetch_no_endpoint')}
+                  </span>
+                  <div className={styles.modelDiscoveryActions}>
                     <Button
                       variant="secondary"
                       size="sm"

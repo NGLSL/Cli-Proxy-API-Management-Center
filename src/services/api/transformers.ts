@@ -120,22 +120,13 @@ const normalizeProviderKeyConfig = (item: unknown): ProviderKeyConfig | null => 
   const record = isRecord(item) ? item : null;
   const apiKey = record?.['api-key'] ?? record?.apiKey ?? (typeof item === 'string' ? item : '');
   const trimmed = String(apiKey || '').trim();
-  const rawEntries = record?.['api-key-entries'] ?? record?.apiKeyEntries;
-  const apiKeyEntries = Array.isArray(rawEntries)
-    ? (rawEntries
-        .map((entry) => normalizeApiKeyEntry(entry))
-        .filter(Boolean) as ApiKeyEntry[])
-    : [];
-  if (!trimmed && apiKeyEntries.length === 0) return null;
+  if (!trimmed) return null;
 
-  const config: ProviderKeyConfig = { apiKey: trimmed || apiKeyEntries[0]?.apiKey || '' };
-  if (apiKeyEntries.length) {
-    config.apiKeyEntries = apiKeyEntries;
-  }
-  const name = record?.name ?? record?.['name'];
-  if (typeof name === 'string' && name.trim()) {
-    config.name = name.trim();
-  }
+  const config: ProviderKeyConfig = { apiKey: trimmed };
+  const disableCooling = normalizeBoolean(
+    record?.['disable-cooling'] ?? record?.disableCooling ?? record?.disable_cooling
+  );
+  if (disableCooling !== undefined) config.disableCooling = disableCooling;
   const priority = record?.priority ?? record?.['priority'];
   if (priority !== undefined && priority !== null && String(priority).trim() !== '') {
     const parsed = Number(priority);
@@ -150,16 +141,7 @@ const normalizeProviderKeyConfig = (item: unknown): ProviderKeyConfig | null => 
   if (baseUrl) config.baseUrl = String(baseUrl);
   const websockets = normalizeBoolean(record?.websockets ?? record?.['websockets']);
   if (websockets !== undefined) config.websockets = websockets;
-  if (proxyUrl) {
-    const normalizedProxyUrl = String(proxyUrl);
-    config.proxyUrl = normalizedProxyUrl;
-    if (apiKeyEntries.length) {
-      config.apiKeyEntries = apiKeyEntries.map((entry) => ({
-        ...entry,
-        proxyUrl: entry.proxyUrl || normalizedProxyUrl
-      }));
-    }
-  }
+  if (proxyUrl) config.proxyUrl = String(proxyUrl);
   const headers = normalizeHeaders(record?.headers);
   if (headers) config.headers = headers;
   const models = normalizeModelAliases(record?.models);

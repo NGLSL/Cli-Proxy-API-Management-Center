@@ -271,6 +271,8 @@
     "codex_keys_count": "Количество ключей",
     "codex_websockets_label": "Websockets",
     "codex_websockets_hint": "Включает websocket-транспорт Responses API для этого ключа.",
+    "codex_disable_cooling_label": "Отключить охлаждение",
+    "codex_disable_cooling_hint": "Если включено, этот ключ не будет охлаждаться при балансировке. Подходит для ключей без ограничений параллелизма.",
     "codex_models_label": "Пользовательские модели (необязательно):",
     "codex_models_hint": "Оставьте пустым, чтобы разрешить все модели, или добавьте записи name[, alias], чтобы ограничить/переименовать их.",
     "codex_models_add_btn": "Добавить модель",
