@@ -147,7 +147,7 @@ export function CodexSection({
                 )}
                 {item.apiKey && (
                   <div className={styles.fieldRow}>
-                    <span className={styles.fieldLabel}>{t('ai_providers.codex_api_key_label')}:</span>
+                    <span className={styles.fieldLabel}>{t('ai_providers.codex_add_modal_key_label')}:</span>
                     <span className={styles.fieldValue}>{maskApiKey(item.apiKey)}</span>
                   </div>
                 )}
