@@ -720,7 +720,7 @@ export function AiProvidersCodexEditPage() {
                     onClick={handleApplyDiscoveredModels}
                     disabled={!canApplyModelDiscovery}
                   >
-                    {t('ai_providers.model_discovery_apply', {
+                    {t('ai_providers.codex_models_fetch_apply', {
                       count: modelDiscoverySelected.size,
                     })}
                   </Button>
