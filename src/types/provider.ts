@@ -12,8 +12,8 @@ export interface ModelAlias {
 
 export interface ApiKeyEntry {
   apiKey: string;
+  existingApiKey?: string;
   proxyUrl?: string;
-  headers?: Record<string, string>;
 }
 
 export interface CloakConfig {

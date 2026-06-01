@@ -16,7 +16,11 @@ import { modelsApi, providersApi } from '@/services/api';
 import { useAuthStore, useConfigStore, useNotificationStore } from '@/stores';
 import type { ProviderKeyConfig } from '@/types';
 import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
-import { areKeyValueEntriesEqual, areModelEntriesEqual, areStringArraysEqual } from '@/utils/compare';
+import {
+  areKeyValueEntriesEqual,
+  areModelEntriesEqual,
+  areStringArraysEqual,
+} from '@/utils/compare';
 import { entriesToModels, modelsToEntries } from '@/components/ui/modelInputListUtils';
 import { excludedModelsToText, parseExcludedModels } from '@/components/providers/utils';
 import type { ModelInfo } from '@/utils/models';
@@ -99,7 +103,9 @@ const buildCodexBaseline = (form: CodexFormState): CodexFormBaseline => ({
   apiKey: String(form.apiKey ?? '').trim(),
   disableCooling: Boolean(form.disableCooling),
   priority:
-    form.priority !== undefined && Number.isFinite(form.priority) ? Math.trunc(form.priority) : null,
+    form.priority !== undefined && Number.isFinite(form.priority)
+      ? Math.trunc(form.priority)
+      : null,
   prefix: String(form.prefix ?? '').trim(),
   baseUrl: String(form.baseUrl ?? '').trim(),
   websockets: Boolean(form.websockets),
@@ -208,7 +214,7 @@ export function AiProvidersCodexEditPage() {
 
     if (initialData) {
       const nextForm: CodexFormState = {
-        apiKey: initialData.apiKey ?? '',
+        apiKey: '',
         disableCooling: Boolean(initialData.disableCooling),
         priority: initialData.priority,
         prefix: initialData.prefix ?? '',
@@ -352,10 +358,10 @@ export function AiProvidersCodexEditPage() {
       const hasCustomAuthorization = Object.keys(headerObject).some(
         (key) => key.toLowerCase() === 'authorization'
       );
-      const apiKey = form.apiKey?.trim() || undefined;
+      const apiKey = form.apiKey?.trim() || initialData?.apiKey?.trim() || '';
       const list = await modelsApi.fetchV1ModelsViaApiCall(
         form.baseUrl ?? '',
-        hasCustomAuthorization ? undefined : apiKey,
+        hasCustomAuthorization ? undefined : apiKey || undefined,
         headerObject
       );
       if (modelDiscoveryRequestIdRef.current !== requestId) return;
@@ -370,7 +376,7 @@ export function AiProvidersCodexEditPage() {
         setModelDiscoveryFetching(false);
       }
     }
-  }, [form.apiKey, form.baseUrl, form.headers, t]);
+  }, [form.apiKey, form.baseUrl, form.headers, initialData, t]);
 
   useEffect(() => {
     if (!modelDiscoveryOpen) {
@@ -393,7 +399,8 @@ export function AiProvidersCodexEditPage() {
     const hasCustomAuthorization = Object.keys(headerObject).some(
       (key) => key.toLowerCase() === 'authorization'
     );
-    const hasApiKeyField = Boolean(form.apiKey?.trim());
+    const apiKey = form.apiKey?.trim() || initialData?.apiKey?.trim() || '';
+    const hasApiKeyField = Boolean(apiKey);
     const canAutoFetch = hasApiKeyField || hasCustomAuthorization;
 
     if (!canAutoFetch) return;
@@ -402,12 +409,19 @@ export function AiProvidersCodexEditPage() {
       .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
       .map(([key, value]) => `${key}:${value}`)
       .join('|');
-    const signature = `${nextEndpoint}||${form.apiKey?.trim()}||${headerSignature}`;
+    const signature = `${nextEndpoint}||${apiKey}||${headerSignature}`;
     if (autoFetchSignatureRef.current === signature) return;
     autoFetchSignatureRef.current = signature;
 
     void fetchCodexModelDiscovery();
-  }, [fetchCodexModelDiscovery, form.apiKey, form.baseUrl, form.headers, modelDiscoveryOpen]);
+  }, [
+    fetchCodexModelDiscovery,
+    form.apiKey,
+    form.baseUrl,
+    form.headers,
+    initialData,
+    modelDiscoveryOpen,
+  ]);
 
   useEffect(() => {
     const availableNames = new Set(discoveredModels.map((model) => model.name));
@@ -462,7 +476,7 @@ export function AiProvidersCodexEditPage() {
   const handleSave = useCallback(async () => {
     if (!canSave) return;
 
-    const trimmedApiKey = (form.apiKey ?? '').trim();
+    const trimmedApiKey = (form.apiKey ?? '').trim() || initialData?.apiKey?.trim() || '';
     if (!trimmedApiKey) {
       showNotification(t('notification.codex_key_required'), 'error');
       return;
@@ -519,6 +533,7 @@ export function AiProvidersCodexEditPage() {
     editIndex,
     form,
     handleBack,
+    initialData,
     showNotification,
     t,
     updateConfigValue,
@@ -579,6 +594,10 @@ export function AiProvidersCodexEditPage() {
               placeholder={t('ai_providers.codex_add_modal_key_placeholder')}
               value={form.apiKey}
               onChange={(e) => setForm((prev) => ({ ...prev, apiKey: e.target.value }))}
+              autoComplete="new-password"
+              data-1p-ignore="true"
+              data-lpignore="true"
+              data-bwignore="true"
               disabled={disableControls || saving}
             />
             <Input

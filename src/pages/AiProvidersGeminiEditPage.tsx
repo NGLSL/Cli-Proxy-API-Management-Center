@@ -15,7 +15,11 @@ import { modelsApi, providersApi } from '@/services/api';
 import { useAuthStore, useConfigStore, useNotificationStore } from '@/stores';
 import type { GeminiKeyConfig } from '@/types';
 import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
-import { areKeyValueEntriesEqual, areModelEntriesEqual, areStringArraysEqual } from '@/utils/compare';
+import {
+  areKeyValueEntriesEqual,
+  areModelEntriesEqual,
+  areStringArraysEqual,
+} from '@/utils/compare';
 import type { ModelInfo } from '@/utils/models';
 import { entriesToModels, modelsToEntries } from '@/components/ui/modelInputListUtils';
 import { excludedModelsToText, parseExcludedModels } from '@/components/providers/utils';
@@ -75,7 +79,9 @@ type GeminiFormBaseline = {
 const buildGeminiBaseline = (form: GeminiFormState): GeminiFormBaseline => ({
   apiKey: String(form.apiKey ?? '').trim(),
   priority:
-    form.priority !== undefined && Number.isFinite(form.priority) ? Math.trunc(form.priority) : null,
+    form.priority !== undefined && Number.isFinite(form.priority)
+      ? Math.trunc(form.priority)
+      : null,
   prefix: String(form.prefix ?? '').trim(),
   baseUrl: String(form.baseUrl ?? '').trim(),
   proxyUrl: String(form.proxyUrl ?? '').trim(),
@@ -184,6 +190,7 @@ export function AiProvidersGeminiEditPage() {
       const { headers, models, ...rest } = initialData;
       const nextForm: GeminiFormState = {
         ...rest,
+        apiKey: '',
         headers: headersToEntries(headers),
         modelEntries: modelsToEntries(models).map((entry) => ({
           ...entry,
@@ -266,9 +273,10 @@ export function AiProvidersGeminiEditPage() {
     setModelDiscoveryError('');
     const headerObject = buildHeaderObject(form.headers);
     try {
+      const apiKey = form.apiKey.trim() || initialData?.apiKey?.trim() || '';
       const list = await modelsApi.fetchGeminiModelsViaApiCall(
         form.baseUrl ?? '',
-        form.apiKey.trim() || undefined,
+        apiKey || undefined,
         headerObject
       );
       if (modelDiscoveryRequestIdRef.current !== requestId) return;
@@ -285,7 +293,7 @@ export function AiProvidersGeminiEditPage() {
       );
       const shouldAttachDiag = message.toLowerCase().includes('api key') || message.includes('401');
       const diag = shouldAttachDiag
-        ? ` [diag: apiKeyField=${form.apiKey.trim() ? 'yes' : 'no'}, customXGoogApiKey=${
+        ? ` [diag: apiKeyField=${form.apiKey.trim() || initialData?.apiKey?.trim() ? 'yes' : 'no'}, customXGoogApiKey=${
             hasCustomXGoogApiKey ? 'yes' : 'no'
           }, customAuthorization=${hasAuthorization ? 'yes' : 'no'}]`
         : '';
@@ -295,7 +303,7 @@ export function AiProvidersGeminiEditPage() {
         setModelDiscoveryFetching(false);
       }
     }
-  }, [form.apiKey, form.baseUrl, form.headers, t]);
+  }, [form.apiKey, form.baseUrl, form.headers, initialData, t]);
 
   useEffect(() => {
     if (!modelDiscoveryOpen) {
@@ -319,7 +327,8 @@ export function AiProvidersGeminiEditPage() {
     const hasAuthorization = Object.keys(headerObject).some(
       (key) => key.toLowerCase() === 'authorization'
     );
-    const hasApiKeyField = Boolean(form.apiKey.trim());
+    const apiKey = form.apiKey.trim() || initialData?.apiKey?.trim() || '';
+    const hasApiKeyField = Boolean(apiKey);
     const canAutoFetch = hasApiKeyField || hasCustomXGoogApiKey || hasAuthorization;
 
     if (!canAutoFetch) return;
@@ -328,12 +337,19 @@ export function AiProvidersGeminiEditPage() {
       .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
       .map(([key, value]) => `${key}:${value}`)
       .join('|');
-    const signature = `${nextEndpoint}||${form.apiKey.trim()}||${headerSignature}`;
+    const signature = `${nextEndpoint}||${apiKey}||${headerSignature}`;
     if (autoFetchSignatureRef.current === signature) return;
     autoFetchSignatureRef.current = signature;
 
     void fetchGeminiModelDiscovery();
-  }, [fetchGeminiModelDiscovery, form.apiKey, form.baseUrl, form.headers, modelDiscoveryOpen]);
+  }, [
+    fetchGeminiModelDiscovery,
+    form.apiKey,
+    form.baseUrl,
+    form.headers,
+    initialData,
+    modelDiscoveryOpen,
+  ]);
 
   useEffect(() => {
     const availableNames = new Set(discoveredModels.map((model) => model.name));
@@ -447,7 +463,7 @@ export function AiProvidersGeminiEditPage() {
       }));
 
       const payload: GeminiKeyConfig = {
-        apiKey: form.apiKey.trim(),
+        apiKey: form.apiKey.trim() || initialData?.apiKey?.trim() || '',
         priority: form.priority !== undefined ? Math.trunc(form.priority) : undefined,
         prefix: form.prefix?.trim() || undefined,
         baseUrl: form.baseUrl?.trim() || undefined,
@@ -489,6 +505,7 @@ export function AiProvidersGeminiEditPage() {
     editIndex,
     form,
     handleBack,
+    initialData,
     showNotification,
     t,
     updateConfigValue,
@@ -544,6 +561,10 @@ export function AiProvidersGeminiEditPage() {
               placeholder={t('ai_providers.gemini_add_modal_key_placeholder')}
               value={form.apiKey}
               onChange={(e) => setForm((prev) => ({ ...prev, apiKey: e.target.value }))}
+              autoComplete="new-password"
+              data-1p-ignore="true"
+              data-lpignore="true"
+              data-bwignore="true"
               disabled={disableControls || saving}
             />
             <Input

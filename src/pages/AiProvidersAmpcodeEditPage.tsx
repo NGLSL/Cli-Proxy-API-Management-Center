@@ -392,6 +392,10 @@ export function AiProvidersAmpcodeEditPage() {
           type="password"
           value={form.upstreamApiKey}
           onChange={(e) => setForm((prev) => ({ ...prev, upstreamApiKey: e.target.value }))}
+          autoComplete="new-password"
+          data-1p-ignore="true"
+          data-lpignore="true"
+          data-bwignore="true"
           disabled={loading || saving || disableControls}
           hint={t('ai_providers.ampcode_upstream_api_key_hint')}
         />
@@ -450,7 +454,9 @@ export function AiProvidersAmpcodeEditPage() {
                     onClick={() => {
                       setUpstreamApiKeysDirty(true);
                       setForm((prev) => {
-                        const nextEntries = prev.upstreamApiKeyEntries.filter((_, entryIndex) => entryIndex !== index);
+                        const nextEntries = prev.upstreamApiKeyEntries.filter(
+                          (_, entryIndex) => entryIndex !== index
+                        );
                         return {
                           ...prev,
                           upstreamApiKeyEntries: nextEntries.length
@@ -469,6 +475,10 @@ export function AiProvidersAmpcodeEditPage() {
                   placeholder={t('ai_providers.ampcode_upstream_api_keys_upstream_placeholder')}
                   aria-label={t('ai_providers.ampcode_upstream_api_keys_upstream_placeholder')}
                   value={entry.upstreamApiKey}
+                  autoComplete="new-password"
+                  data-1p-ignore="true"
+                  data-lpignore="true"
+                  data-bwignore="true"
                   onChange={(e) => {
                     const value = e.target.value;
                     setUpstreamApiKeysDirty(true);

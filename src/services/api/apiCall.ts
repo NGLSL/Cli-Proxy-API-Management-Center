@@ -78,20 +78,17 @@ export const getApiCallErrorMessage = (result: ApiCallResult): string => {
 };
 
 export const apiCallApi = {
-  request: async (
-    payload: ApiCallRequest,
-    config?: AxiosRequestConfig
-  ): Promise<ApiCallResult> => {
+  request: async (payload: ApiCallRequest, config?: AxiosRequestConfig): Promise<ApiCallResult> => {
     const response = await apiClient.post<Record<string, unknown>>('/api-call', payload, config);
-    const statusCode = Number(response?.status_code ?? response?.statusCode ?? 0);
-    const header = (response?.header ?? response?.headers ?? {}) as Record<string, string[]>;
+    const statusCode = Number(response?.status_code ?? 0);
+    const header = (response?.header ?? {}) as Record<string, string[]>;
     const { bodyText, body } = normalizeBody(response?.body);
 
     return {
       statusCode,
       header,
       bodyText,
-      body
+      body,
     };
-  }
+  },
 };
