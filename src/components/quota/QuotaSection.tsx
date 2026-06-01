@@ -212,7 +212,8 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   const refreshQuotaForFile = useCallback(
     async (file: AuthFileItem) => {
       if (disabled || file.disabled) return;
-      if (quota[file.name]?.status === 'loading') return;
+      const currentQuota = quota[file.name];
+      if (currentQuota?.status === 'loading' && currentQuota.cacheStatus !== 'pending') return;
 
       try {
         await loadQuota([file], 'page', setLoading);

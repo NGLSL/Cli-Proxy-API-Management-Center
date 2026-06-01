@@ -118,6 +118,7 @@ export function QuotaCard<TState extends QuotaStatusState>({
   );
   const idleMessageKey = onRefresh ? `${i18nPrefix}.idle` : (cardIdleMessageKey ?? `${i18nPrefix}.idle`);
   const cacheStatus = quota?.cacheStatus;
+  const showPendingCacheAsIdle = quotaStatus === 'loading' && cacheStatus === 'pending';
   const cacheStatusLabel = cacheStatus ? t(`quota_management.cache_status_${cacheStatus}`) : null;
   const lastRefreshLabel = quota?.lastRefreshAt ? formatQuotaResetTime(quota.lastRefreshAt) : null;
   const quotaRecoverLabel = quota?.quotaRecoverAt ? formatQuotaResetTime(quota.quotaRecoverAt) : null;
@@ -147,9 +148,9 @@ export function QuotaCard<TState extends QuotaStatusState>({
       </div>
 
       <div className={styles.quotaSection}>
-        {quotaStatus === 'loading' ? (
+        {quotaStatus === 'loading' && !showPendingCacheAsIdle ? (
           <div className={styles.quotaMessage}>{t(`${i18nPrefix}.loading`)}</div>
-        ) : quotaStatus === 'idle' ? (
+        ) : quotaStatus === 'idle' || showPendingCacheAsIdle ? (
           onRefresh ? (
             <button
               type="button"
