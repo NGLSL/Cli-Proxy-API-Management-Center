@@ -67,7 +67,14 @@ export function AiProvidersOpenAIModelsPage() {
       setError('');
       try {
         const headerObject = buildHeaderObject(form.headers);
-        const firstKey = form.apiKeyEntries.find((entry) => entry.apiKey?.trim())?.apiKey?.trim();
+        // 获取模型列表需要 Authorization，优先使用用户输入的新 key（apiKey），
+        // 如果用户未修改 key 则回退到编辑前的原始 key（existingApiKey）
+        const firstKey =
+          form.apiKeyEntries.find(
+            (entry) => entry.apiKey?.trim() || entry.existingApiKey?.trim()
+          )?.apiKey?.trim() ||
+          form.apiKeyEntries.find((entry) => entry.existingApiKey?.trim())?.existingApiKey?.trim() ||
+          '';
         const hasAuthHeader = hasHeader(headerObject, 'authorization');
         const list = await modelsApi.fetchModelsViaApiCall(
           trimmedBaseUrl,

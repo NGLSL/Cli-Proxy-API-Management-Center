@@ -461,11 +461,11 @@ export function AiProvidersOpenAIEditPage() {
                   <StatusIcon status={keyStatus} />
                 </div>
 
-                {/* Key 输入框 */}
+                {/* Key 输入框 —— 编辑模式下优先显示用户输入的新 key，如果没改则回退显示原始 key */}
                 <div className={styles.keyTableColKey}>
                   <input
                     type="text"
-                    value={entry.apiKey}
+                    value={entry.apiKey || entry.existingApiKey || ''}
                     onChange={(e) => updateEntry(index, 'apiKey', e.target.value)}
                     autoComplete="new-password"
                     data-1p-ignore="true"
