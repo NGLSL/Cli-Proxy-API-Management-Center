@@ -47,6 +47,8 @@ export type ClaudeEditOutletContext = {
   handleBack: () => void;
   handleSave: () => Promise<void>;
   mergeDiscoveredModels: (selectedModels: ModelInfo[]) => void;
+  /** 编辑模式下从后端加载的原始配置，用于回填 key 等字段 */
+  initialData?: ProviderKeyConfig;
 };
 
 const buildEmptyForm = (): ProviderFormState => ({
@@ -510,6 +512,7 @@ export function AiProvidersClaudeEditLayout() {
           handleBack,
           handleSave,
           mergeDiscoveredModels,
+          initialData,
         } satisfies ClaudeEditOutletContext
       }
     />

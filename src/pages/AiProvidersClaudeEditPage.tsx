@@ -63,6 +63,7 @@ export function AiProvidersClaudeEditPage() {
     availableModels,
     handleBack,
     handleSave,
+    initialData,
   } = useOutletContext<ClaudeEditOutletContext>();
 
   const title = hasIndexParam
@@ -305,7 +306,7 @@ export function AiProvidersClaudeEditPage() {
           <div className={styles.openaiEditForm}>
             <Input
               label={t('ai_providers.claude_add_modal_key_label')}
-              value={form.apiKey}
+              value={form.apiKey || initialData?.apiKey || ''}
               onChange={(e) => setForm((prev) => ({ ...prev, apiKey: e.target.value }))}
               autoComplete="new-password"
               data-1p-ignore="true"

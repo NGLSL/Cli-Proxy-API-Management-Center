@@ -559,7 +559,7 @@ export function AiProvidersGeminiEditPage() {
             <Input
               label={t('ai_providers.gemini_add_modal_key_label')}
               placeholder={t('ai_providers.gemini_add_modal_key_placeholder')}
-              value={form.apiKey}
+              value={form.apiKey || initialData?.apiKey || ''}
               onChange={(e) => setForm((prev) => ({ ...prev, apiKey: e.target.value }))}
               autoComplete="new-password"
               data-1p-ignore="true"
