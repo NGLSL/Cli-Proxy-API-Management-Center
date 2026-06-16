@@ -20,8 +20,13 @@ import { UsagePage } from '@/pages/UsagePage';
 import { ConfigPage } from '@/pages/ConfigPage';
 import { LogsPage } from '@/pages/LogsPage';
 import { SystemPage } from '@/pages/SystemPage';
+// v7：插件相关页面（仅在 supportsPlugin=true 时挂载）
+import { PluginResourcePage } from '@/features/plugins/PluginResourcePage';
+import { PluginsPage } from '@/features/plugins/PluginsPage';
+import { PluginStorePage } from '@/features/plugins/PluginStorePage';
+import { useAuthStore } from '@/stores';
 
-const mainRoutes = [
+const createMainRoutes = (supportsPlugin: boolean) => [
   { path: '/', element: <DashboardPage /> },
   { path: '/dashboard', element: <DashboardPage /> },
   { path: '/settings', element: <Navigate to="/config" replace /> },
@@ -73,6 +78,19 @@ const mainRoutes = [
   { path: '/oauth', element: <OAuthPage /> },
   { path: '/quota', element: <QuotaPage /> },
   { path: '/usage', element: <UsagePage /> },
+  // v7：supportsPlugin 为 true 时挂载真实页面，否则把这些路径重定向到首页避免空白
+  ...(supportsPlugin
+    ? [
+        { path: '/plugin-pages/:pluginId/:menuIndex', element: <PluginResourcePage /> },
+        { path: '/plugins', element: <PluginsPage /> },
+        { path: '/plugin-store', element: <PluginStorePage /> },
+        { path: '/plugins/*', element: <Navigate to="/plugins" replace /> },
+      ]
+    : [
+        { path: '/plugin-pages/*', element: <Navigate to="/" replace /> },
+        { path: '/plugins/*', element: <Navigate to="/" replace /> },
+        { path: '/plugin-store', element: <Navigate to="/" replace /> },
+      ]),
   { path: '/config', element: <ConfigPage /> },
   { path: '/logs', element: <LogsPage /> },
   { path: '/system', element: <SystemPage /> },
@@ -80,5 +98,7 @@ const mainRoutes = [
 ];
 
 export function MainRoutes({ location }: { location?: Location }) {
-  return useRoutes(mainRoutes, location);
+  // supportsPlugin 由 MainLayout 在连接成功后探测并写入 store；变更会触发重新渲染
+  const supportsPlugin = useAuthStore((state) => state.supportsPlugin);
+  return useRoutes(createMainRoutes(supportsPlugin), location);
 }

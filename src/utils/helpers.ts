@@ -86,3 +86,21 @@ export function deepClone<T>(obj: T): T {
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+/**
+ * 判断是否为普通对象（排除 null 与数组）
+ * 用于校验从后端拿到的 unknown 数据，再做字段访问
+ */
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * 从 unknown 错误中提取可读消息
+ * 优先级：Error.message -> string -> { message: string } -> fallback
+ */
+export const getErrorMessage = (error: unknown, fallback = ''): string => {
+  if (error instanceof Error) return error.message || fallback;
+  if (typeof error === 'string') return error || fallback;
+  if (isRecord(error) && typeof error.message === 'string') return error.message || fallback;
+  return fallback;
+};

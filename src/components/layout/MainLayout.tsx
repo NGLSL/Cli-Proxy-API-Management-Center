@@ -18,8 +18,10 @@ import {
   IconSidebarDashboard,
   IconSidebarLogs,
   IconSidebarOauth,
+  IconSidebarPlugins,
   IconSidebarProviders,
   IconSidebarQuota,
+  IconSidebarStore,
   IconSidebarSystem,
   IconSidebarUsage,
 } from '@/components/ui/icons';
@@ -34,6 +36,14 @@ import {
 import { triggerHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { LANGUAGE_LABEL_KEYS, LANGUAGE_ORDER } from '@/utils/constants';
 import { isSupportedLanguage } from '@/utils/language';
+// v7：插件资源条目（用于在侧边栏展开插件提供的菜单）与支持检测
+import { pluginsApi } from '@/services/api';
+import {
+  collectPluginResourceEntries,
+  PLUGIN_RESOURCES_REFRESH_EVENT,
+  resolvePluginAssetURL,
+  type PluginResourceEntry,
+} from '@/features/plugins/pluginResources';
 import type { Theme } from '@/types';
 
 const sidebarIcons: Record<string, ReactNode> = {
@@ -43,10 +53,36 @@ const sidebarIcons: Record<string, ReactNode> = {
   oauth: <IconSidebarOauth size={18} />,
   quota: <IconSidebarQuota size={18} />,
   usage: <IconSidebarUsage size={18} />,
+  // v7：插件管理 + 插件商店入口图标
+  plugins: <IconSidebarPlugins size={18} />,
+  pluginStore: <IconSidebarStore size={18} />,
   config: <IconSidebarConfig size={18} />,
   logs: <IconSidebarLogs size={18} />,
   system: <IconSidebarSystem size={18} />,
 };
+
+// v7：插件资源条目的侧边栏图标——logo 加载失败时回退到通用插头图标
+function PluginSidebarIcon({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = Boolean(src) && !failed;
+
+  return showImage ? (
+    <img
+      src={src}
+      alt=""
+      onError={() => setFailed(true)}
+      style={{ width: 18, height: 18, objectFit: 'cover', borderRadius: 4 }}
+    />
+  ) : (
+    <IconSidebarPlugins size={18} />
+  );
+}
+
+// 把插件 logo 转成完整 URL 后塞给 PluginSidebarIcon
+function pluginResourceLogo(entry: PluginResourceEntry, apiBase: string) {
+  const src = resolvePluginAssetURL(entry.pluginLogo, apiBase);
+  return <PluginSidebarIcon src={src} />;
+}
 
 // Header action icons - smaller size for header buttons
 const headerIconProps: SVGProps<SVGSVGElement> = {
@@ -209,6 +245,8 @@ export function MainLayout() {
 
   const apiBase = useAuthStore((state) => state.apiBase);
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
+  // v7：是否显示插件入口；连接成功后由下面的 effect 探测 /plugins 接口决定
+  const supportsPlugin = useAuthStore((state) => state.supportsPlugin);
   const logout = useAuthStore((state) => state.logout);
 
   const config = useConfigStore((state) => state.config);
@@ -225,6 +263,9 @@ export function MainLayout() {
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [brandExpanded, setBrandExpanded] = useState(true);
+  // v7：插件资源条目（来自 enabled 插件的 menus），由 PluginsPage 在
+  // 启用/禁用/安装/删除后通过 PLUGIN_RESOURCES_REFRESH_EVENT 派发刷新
+  const [pluginResourceEntries, setPluginResourceEntries] = useState<PluginResourceEntry[]>([]);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const languageMenuRef = useRef<HTMLDivElement | null>(null);
   const themeMenuRef = useRef<HTMLDivElement | null>(null);
@@ -409,6 +450,67 @@ export function MainLayout() {
     });
   }, [fetchConfig]);
 
+  // v7：连接成功后探测一次 /plugins 接口，决定是否启用插件入口；
+  // 后端不支持时返回 404/405，我们视为 supportsPlugin=false，避免空页面
+  useEffect(() => {
+    if (connectionStatus !== 'connected') return;
+    let cancelled = false;
+
+    const detect = async () => {
+      try {
+        await pluginsApi.list();
+        if (!cancelled) {
+          window.dispatchEvent(
+            new CustomEvent('server-plugin-support-update', { detail: { supportsPlugin: true } })
+          );
+        }
+      } catch (error: unknown) {
+        if (cancelled) return;
+        const status =
+          typeof error === 'object' && error !== null && 'status' in error
+            ? (error as { status?: unknown }).status
+            : undefined;
+        // 仅 404/405 视为"后端无此接口"；其它错误（401/500）保持当前状态由后续重试决定
+        const supported = status !== 404 && status !== 405;
+        window.dispatchEvent(
+          new CustomEvent('server-plugin-support-update', { detail: { supportsPlugin: supported } })
+        );
+      }
+    };
+
+    void detect();
+    return () => {
+      cancelled = true;
+    };
+  }, [connectionStatus]);
+
+  // v7：拉取/刷新插件资源条目；PluginsPage 任何变更后都会派发事件触发重建
+  useEffect(() => {
+    if (!supportsPlugin) {
+      setPluginResourceEntries([]);
+      return;
+    }
+
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const resp = await pluginsApi.list();
+        if (cancelled) return;
+        setPluginResourceEntries(collectPluginResourceEntries(resp.plugins));
+      } catch {
+        if (cancelled) return;
+        setPluginResourceEntries([]);
+      }
+    };
+
+    void load();
+    window.addEventListener(PLUGIN_RESOURCES_REFRESH_EVENT, load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(PLUGIN_RESOURCES_REFRESH_EVENT, load);
+    };
+  }, [supportsPlugin]);
+
   const statusClass =
     connectionStatus === 'connected'
       ? 'success'
@@ -426,6 +528,19 @@ export function MainLayout() {
     { path: '/oauth', label: t('nav.oauth', { defaultValue: 'OAuth' }), icon: sidebarIcons.oauth },
     { path: '/quota', label: t('nav.quota_management'), icon: sidebarIcons.quota },
     { path: '/usage', label: t('nav.usage_stats'), icon: sidebarIcons.usage },
+    // v7：仅当后端支持插件 API 时才显示入口；顺序保持在 logs 之前
+    ...(supportsPlugin
+      ? [
+          { path: '/plugins', label: t('nav.plugins'), icon: sidebarIcons.plugins },
+          { path: '/plugin-store', label: t('nav.plugin_store'), icon: sidebarIcons.pluginStore },
+        ]
+      : []),
+    // v7：展开的插件资源（每个 effective 插件的每个 menu），点击直达 iframe 页面
+    ...pluginResourceEntries.map((entry) => ({
+      path: entry.route,
+      label: entry.label,
+      icon: pluginResourceLogo(entry, apiBase),
+    })),
     ...(config?.loggingToFile
       ? [{ path: '/logs', label: t('nav.logs'), icon: sidebarIcons.logs }]
       : []),

@@ -24,6 +24,8 @@ interface AuthStoreState extends AuthState {
   checkAuth: () => Promise<boolean>;
   restoreSession: () => Promise<boolean>;
   updateServerVersion: (version: string | null, buildDate?: string | null) => void;
+  // v7：外部（MainLayout 探测后）通过此方法写入 supportsPlugin，触发路由/侧边栏更新
+  updateServerPluginSupport: (supportsPlugin: boolean) => void;
   updateConnectionStatus: (status: ConnectionStatus, error?: string | null) => void;
 }
 
@@ -39,6 +41,7 @@ export const useAuthStore = create<AuthStoreState>()(
       rememberPassword: false,
       serverVersion: null,
       serverBuildDate: null,
+      supportsPlugin: false,
       connectionStatus: 'disconnected',
       connectionError: null,
 
@@ -94,7 +97,8 @@ export const useAuthStore = create<AuthStoreState>()(
         const rememberPassword = credentials.rememberPassword ?? get().rememberPassword ?? false;
 
         try {
-          set({ connectionStatus: 'connecting' });
+          // v7：登录前重置插件支持状态，避免上一次会话的残留影响路由
+          set({ connectionStatus: 'connecting', supportsPlugin: false });
           useModelsStore.getState().clearCache();
 
           // 配置 API 客户端
@@ -147,6 +151,7 @@ export const useAuthStore = create<AuthStoreState>()(
           managementKey: '',
           serverVersion: null,
           serverBuildDate: null,
+          supportsPlugin: false,
           connectionStatus: 'disconnected',
           connectionError: null
         });
@@ -164,6 +169,8 @@ export const useAuthStore = create<AuthStoreState>()(
         try {
           // 重新配置客户端
           apiClient.setConfig({ apiBase, managementKey });
+          // v7：重新校验连接时清空插件支持状态，由 MainLayout 探测后再次写入
+          set({ supportsPlugin: false });
 
           // 验证连接
           await useConfigStore.getState().fetchConfig();
@@ -177,7 +184,8 @@ export const useAuthStore = create<AuthStoreState>()(
         } catch {
           set({
             isAuthenticated: false,
-            connectionStatus: 'error'
+            connectionStatus: 'error',
+            supportsPlugin: false
           });
           return false;
         }
@@ -186,6 +194,11 @@ export const useAuthStore = create<AuthStoreState>()(
       // 更新服务器版本
       updateServerVersion: (version, buildDate) => {
         set({ serverVersion: version || null, serverBuildDate: buildDate || null });
+      },
+
+      // v7：写入后端插件 API 支持情况（由 MainLayout 探测后调用）
+      updateServerPluginSupport: (supportsPlugin) => {
+        set({ supportsPlugin });
       },
 
       // 更新连接状态
@@ -232,6 +245,14 @@ if (typeof window !== 'undefined') {
     ((e: CustomEvent) => {
       const detail = e.detail || {};
       useAuthStore.getState().updateServerVersion(detail.version || null, detail.buildDate || null);
+    }) as EventListener
+  );
+
+  // v7：MainLayout 探测完 /plugins 后会派发此事件，由 store 统一收敛 supportsPlugin 状态
+  window.addEventListener(
+    'server-plugin-support-update',
+    ((e: CustomEvent) => {
+      useAuthStore.getState().updateServerPluginSupport(e.detail?.supportsPlugin === true);
     }) as EventListener
   );
 }
