@@ -104,8 +104,9 @@ const serializeVertexModelAliases = (models?: ModelAlias[]) =>
         .map((model) => {
           const name = typeof model?.name === 'string' ? model.name.trim() : '';
           const alias = typeof model?.alias === 'string' ? model.alias.trim() : '';
-          if (!name || !alias) return null;
-          return { name, alias };
+          if (!name) return null;
+          // Vertex 模型只要求模型名；别名为空时仍然保存模型名，避免新增模型被序列化层丢弃。
+          return alias ? { name, alias } : { name };
         })
         .filter(Boolean)
     : undefined;

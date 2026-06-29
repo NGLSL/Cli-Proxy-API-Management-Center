@@ -263,8 +263,9 @@ export function AiProvidersVertexEditPage() {
           .map((entry) => {
             const name = entry.name.trim();
             const alias = entry.alias.trim();
-            if (!name || !alias) return null;
-            return { name, alias };
+            if (!name) return null;
+            // Vertex 模型只要求填写模型名，别名是可选展示名；不填别名时也必须保存模型名。
+            return alias ? { name, alias } : { name };
           })
           .filter(Boolean) as ProviderKeyConfig['models'],
         excludedModels: parseExcludedModels(form.excludedText),
