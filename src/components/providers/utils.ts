@@ -1,4 +1,5 @@
 import type { OpenAIProviderConfig } from '@/types';
+import { buildCandidateUsageSourceIds, normalizeAuthIndex } from '@/utils/usage';
 import {
   buildRecentRequestCompositeKey,
   mergeRecentRequestBucketGroups,
@@ -127,7 +128,9 @@ const getProviderRecentUsageEntry = (
   usageByProvider: ProviderRecentUsageMap,
   provider: string,
   apiKey?: string,
-  baseUrl?: string
+  baseUrl?: string,
+  authIndex?: unknown,
+  prefix?: string
 ): RecentRequestUsageEntry => {
   if (!String(apiKey ?? '').trim()) {
     return EMPTY_RECENT_USAGE_ENTRY;
@@ -135,25 +138,61 @@ const getProviderRecentUsageEntry = (
 
   const providerKey = normalizeProviderRecentKey(provider);
   const compositeKey = buildRecentRequestCompositeKey(baseUrl, apiKey);
-  return usageByProvider.get(providerKey)?.get(compositeKey) ?? EMPTY_RECENT_USAGE_ENTRY;
+  const providerUsage = usageByProvider.get(providerKey);
+  const exactEntry = providerUsage?.get(compositeKey);
+  if (exactEntry && hasRecentUsageEntryData(exactEntry)) {
+    return exactEntry;
+  }
+
+  const candidateKeys = [
+    ...buildCandidateUsageSourceIds({ apiKey, prefix }),
+    normalizeAuthIndex(authIndex),
+  ].filter((value): value is string => Boolean(value));
+  for (const candidateKey of candidateKeys) {
+    const providerEntry = providerUsage?.get(candidateKey);
+    if (providerEntry && hasRecentUsageEntryData(providerEntry)) {
+      return providerEntry;
+    }
+  }
+
+  for (const usageByCompositeKey of usageByProvider.values()) {
+    for (const candidateKey of candidateKeys) {
+      const fallbackEntry = usageByCompositeKey.get(candidateKey);
+      if (fallbackEntry && hasRecentUsageEntryData(fallbackEntry)) {
+        return fallbackEntry;
+      }
+    }
+  }
+
+  return exactEntry ?? EMPTY_RECENT_USAGE_ENTRY;
 };
+
+const hasRecentUsageEntryData = (entry: RecentRequestUsageEntry): boolean =>
+  entry.success > 0 ||
+  entry.failed > 0 ||
+  entry.recentRequests.some((bucket) => bucket.success > 0 || bucket.failed > 0);
 
 const getProviderRecentBuckets = (
   usageByProvider: ProviderRecentUsageMap,
   provider: string,
   apiKey?: string,
-  baseUrl?: string
+  baseUrl?: string,
+  authIndex?: unknown,
+  prefix?: string
 ): RecentRequestBucket[] =>
-  getProviderRecentUsageEntry(usageByProvider, provider, apiKey, baseUrl).recentRequests;
+  getProviderRecentUsageEntry(usageByProvider, provider, apiKey, baseUrl, authIndex, prefix)
+    .recentRequests;
 
 export function getProviderRecentStatusData(
   usageByProvider: ProviderRecentUsageMap,
   provider: string,
   apiKey?: string,
-  baseUrl?: string
+  baseUrl?: string,
+  authIndex?: unknown,
+  prefix?: string
 ): StatusBarData {
   return statusBarDataFromRecentRequests(
-    getProviderRecentBuckets(usageByProvider, provider, apiKey, baseUrl)
+    getProviderRecentBuckets(usageByProvider, provider, apiKey, baseUrl, authIndex, prefix)
   );
 }
 
@@ -161,9 +200,18 @@ export function getProviderTotalStats(
   usageByProvider: ProviderRecentUsageMap,
   provider: string,
   apiKey?: string,
-  baseUrl?: string
+  baseUrl?: string,
+  authIndex?: unknown,
+  prefix?: string
 ): { success: number; failure: number } {
-  const entry = getProviderRecentUsageEntry(usageByProvider, provider, apiKey, baseUrl);
+  const entry = getProviderRecentUsageEntry(
+    usageByProvider,
+    provider,
+    apiKey,
+    baseUrl,
+    authIndex,
+    prefix
+  );
   return { success: entry.success, failure: entry.failed };
 }
 
@@ -171,9 +219,13 @@ export function getProviderRecentWindowStats(
   usageByProvider: ProviderRecentUsageMap,
   provider: string,
   apiKey?: string,
-  baseUrl?: string
+  baseUrl?: string,
+  authIndex?: unknown,
+  prefix?: string
 ): { success: number; failure: number } {
-  return sumRecentRequests(getProviderRecentBuckets(usageByProvider, provider, apiKey, baseUrl));
+  return sumRecentRequests(
+    getProviderRecentBuckets(usageByProvider, provider, apiKey, baseUrl, authIndex, prefix)
+  );
 }
 
 const collectOpenAIProviderRecentBuckets = (
@@ -185,7 +237,14 @@ const collectOpenAIProviderRecentBuckets = (
   }
 
   const groups = provider.apiKeyEntries.map((entry) =>
-    getProviderRecentBuckets(usageByProvider, provider.name, entry.apiKey, provider.baseUrl)
+    getProviderRecentBuckets(
+      usageByProvider,
+      provider.name,
+      entry.apiKey,
+      provider.baseUrl,
+      entry.authIndex ?? provider.authIndex,
+      provider.prefix
+    )
   );
 
   return mergeRecentRequestBucketGroups(groups);
@@ -208,7 +267,9 @@ export function getOpenAIProviderTotalStats(
         usageByProvider,
         provider.name,
         entry.apiKey,
-        provider.baseUrl
+        provider.baseUrl,
+        entry.authIndex ?? provider.authIndex,
+        provider.prefix
       );
       return {
         success: total.success + usageEntry.success,

@@ -324,11 +324,11 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
             onClick={handleRefresh}
             disabled={disabled || isRefreshing}
             loading={isRefreshing}
-            title={t('quota_management.refresh_all_credentials')}
-            aria-label={t('quota_management.refresh_all_credentials')}
+            title={t('quota_management.refresh_files_and_quota')}
+            aria-label={t('quota_management.refresh_files_and_quota')}
           >
             {!isRefreshing && <IconRefreshCw size={16} />}
-            {t('quota_management.refresh_all_credentials')}
+            {t('quota_management.refresh_files_and_quota')}
           </Button>
         </div>
       }

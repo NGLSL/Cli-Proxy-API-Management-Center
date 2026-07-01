@@ -1637,7 +1637,7 @@
     "cache_status_pending": "等待刷新",
     "last_refresh": "上次刷新",
     "quota_recover_at": "恢复时间",
-    "card_idle_hint": "请使用顶部“刷新全部凭证”按钮获取最新额度。"
+    "card_idle_hint": "请使用顶部“刷新认证文件&额度”按钮获取最新额度。"
   },
   "plugin_management": {
     "title": "插件管理",

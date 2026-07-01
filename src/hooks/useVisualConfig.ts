@@ -209,6 +209,11 @@ export function getVisualConfigValidationErrors(
     requestRetry: getNonNegativeIntegerError(values.requestRetry),
     maxRetryCredentials: getNonNegativeIntegerError(values.maxRetryCredentials),
     maxRetryInterval: getNonNegativeIntegerError(values.maxRetryInterval),
+    quotaCacheRefreshInterval: getNonNegativeIntegerError(values.quotaCacheRefreshInterval),
+    routingStickyTTL:
+      values.routingStrategy === 'sticky-round-robin'
+        ? getNonNegativeIntegerError(values.routingStickyTTL)
+        : undefined,
     authAutoRefreshWorkers: getNonNegativeIntegerError(values.authAutoRefreshWorkers),
     'streaming.keepaliveSeconds': getNonNegativeIntegerError(values.streaming.keepaliveSeconds),
     'streaming.bootstrapRetries': getNonNegativeIntegerError(values.streaming.bootstrapRetries),
@@ -905,11 +910,13 @@ function getNextDirtyFields(
       'requestRetry',
       'maxRetryCredentials',
       'maxRetryInterval',
+      'quotaCacheRefreshInterval',
       'wsAuth',
       'quotaSwitchProject',
       'quotaSwitchPreviewModel',
       'quotaAntigravityCredits',
       'routingStrategy',
+      'routingStickyTTL',
       'routingSessionAffinity',
       'routingSessionAffinityTTL',
     ] as Array<keyof VisualConfigValues>
@@ -1114,6 +1121,7 @@ export function useVisualConfig() {
         requestRetry: String(parsed['request-retry'] ?? ''),
         maxRetryCredentials: String(parsed['max-retry-credentials'] ?? ''),
         maxRetryInterval: String(parsed['max-retry-interval'] ?? ''),
+        quotaCacheRefreshInterval: String(parsed['quota-cache-refresh-interval'] ?? ''),
         disableCooling: Boolean(parsed['disable-cooling']),
         disableImageGeneration: parseDisableImageGenerationMode(parsed['disable-image-generation']),
         gptImage2BaseModel:
@@ -1161,7 +1169,13 @@ export function useVisualConfig() {
         quotaSwitchPreviewModel: Boolean(quotaExceeded?.['switch-preview-model'] ?? true),
         quotaAntigravityCredits: Boolean(quotaExceeded?.['antigravity-credits'] ?? false),
 
-        routingStrategy: routing?.strategy === 'fill-first' ? 'fill-first' : 'round-robin',
+        routingStrategy:
+          routing?.strategy === 'fill-first'
+            ? 'fill-first'
+            : routing?.strategy === 'sticky-round-robin'
+              ? 'sticky-round-robin'
+              : 'round-robin',
+        routingStickyTTL: String(routing?.['sticky-ttl'] ?? routing?.stickyTTL ?? ''),
         routingSessionAffinity: Boolean(
           routing?.['session-affinity'] ?? routing?.sessionAffinity ?? routing?.['sessionAffinity']
         ),
@@ -1320,6 +1334,11 @@ export function useVisualConfig() {
         setIntFromStringInDoc(doc, ['request-retry'], values.requestRetry);
         setIntFromStringInDoc(doc, ['max-retry-credentials'], values.maxRetryCredentials);
         setIntFromStringInDoc(doc, ['max-retry-interval'], values.maxRetryInterval);
+        setIntFromStringInDoc(
+          doc,
+          ['quota-cache-refresh-interval'],
+          values.quotaCacheRefreshInterval
+        );
         setBooleanInDoc(doc, ['disable-cooling'], values.disableCooling);
         setDisableImageGenerationInDoc(
           doc,
@@ -1447,14 +1466,29 @@ export function useVisualConfig() {
           deleteIfMapEmpty(doc, ['quota-exceeded']);
         }
 
+        const routingStickyTTL =
+          typeof values.routingStickyTTL === 'string' ? values.routingStickyTTL : '';
+        const shouldWriteRoutingStickyTTL = values.routingStrategy === 'sticky-round-robin';
         if (
           docHas(doc, ['routing']) ||
           values.routingStrategy !== 'round-robin' ||
+          (shouldWriteRoutingStickyTTL && routingStickyTTL.trim()) ||
           values.routingSessionAffinity ||
           values.routingSessionAffinityTTL.trim()
         ) {
           ensureMapInDoc(doc, ['routing']);
-          doc.setIn(['routing', 'strategy'], values.routingStrategy);
+          if (values.routingStrategy === 'round-robin') {
+            if (docHas(doc, ['routing', 'strategy'])) {
+              doc.deleteIn(['routing', 'strategy']);
+            }
+          } else {
+            doc.setIn(['routing', 'strategy'], values.routingStrategy);
+          }
+          if (shouldWriteRoutingStickyTTL) {
+            setIntFromStringInDoc(doc, ['routing', 'sticky-ttl'], routingStickyTTL);
+          } else if (docHas(doc, ['routing', 'sticky-ttl'])) {
+            doc.deleteIn(['routing', 'sticky-ttl']);
+          }
           setBooleanInDoc(doc, ['routing', 'session-affinity'], values.routingSessionAffinity);
           setStringInDoc(
             doc,

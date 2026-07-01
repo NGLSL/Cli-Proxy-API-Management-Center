@@ -1637,7 +1637,7 @@
     "cache_status_pending": "Pending",
     "last_refresh": "Last refresh",
     "quota_recover_at": "Recover at",
-    "card_idle_hint": "Use the top \"Refresh all credentials\" button to fetch the latest quota data."
+    "card_idle_hint": "Use the top \"Refresh files & quota\" button to fetch the latest quota data."
   },
   "plugin_management": {
     "title": "Plugin Management",

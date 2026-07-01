@@ -90,7 +90,9 @@ const getResourceRecentSuccess = (
     usageByProvider,
     resource.brand,
     resource.apiKey ?? undefined,
-    resource.baseUrl ?? undefined
+    resource.baseUrl ?? undefined,
+    resource.authIndex,
+    resource.prefix ?? undefined
   ).success;
 };
 

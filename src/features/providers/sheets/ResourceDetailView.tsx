@@ -134,7 +134,9 @@ export function ResourceDetailView({ resource, usageByProvider }: ResourceDetail
                     usageByProvider,
                     openaiConfig.name,
                     entry.apiKey,
-                    openaiConfig.baseUrl
+                    openaiConfig.baseUrl,
+                    entry.authIndex ?? openaiConfig.authIndex,
+                    openaiConfig.prefix
                   )
                 : { success: 0, failure: 0 };
               return (

@@ -159,7 +159,15 @@ export const CONFIG_FIELD_SEARCH_INDEX: ConfigFieldSearchEntry[] = [
     labelKey: L('sections.network.routing_strategy'),
     hintKey: L('sections.network.routing_strategy_hint'),
     yamlKeys: ['routing', 'strategy'],
-    keywords: ['round-robin', 'fill-first'],
+    keywords: ['round-robin', 'fill-first', 'sticky-round-robin', 'sticky'],
+  },
+  {
+    fieldId: 'routingStickyTTL',
+    sectionId: 'network',
+    labelKey: L('sections.network.sticky_ttl'),
+    hintKey: L('sections.network.sticky_ttl_hint'),
+    yamlKeys: ['routing', 'sticky-ttl'],
+    keywords: ['sticky', 'ttl'],
   },
   {
     fieldId: 'disableImageGeneration',
@@ -265,6 +273,14 @@ export const CONFIG_FIELD_SEARCH_INDEX: ConfigFieldSearchEntry[] = [
     yamlKeys: ['usage-statistics-enabled'],
   },
   // ── quota ─────────────────────────────────────────────────────────────────
+  {
+    fieldId: 'quotaCacheRefreshInterval',
+    sectionId: 'quota',
+    labelKey: L('sections.quota.refresh_interval'),
+    hintKey: L('sections.quota.refresh_interval_hint'),
+    yamlKeys: ['quota-cache-refresh-interval'],
+    keywords: ['quota', 'refresh', 'interval'],
+  },
   {
     fieldId: 'quotaSwitchProject',
     sectionId: 'quota',

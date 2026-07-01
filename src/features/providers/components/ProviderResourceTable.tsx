@@ -54,7 +54,9 @@ const resolveStatusBarData = (
     usageByProvider,
     resource.brand,
     resource.apiKey ?? undefined,
-    resource.baseUrl ?? undefined
+    resource.baseUrl ?? undefined,
+    resource.authIndex,
+    resource.prefix ?? undefined
   );
 };
 
@@ -69,7 +71,9 @@ const resolveTotalStats = (
     usageByProvider,
     resource.brand,
     resource.apiKey ?? undefined,
-    resource.baseUrl ?? undefined
+    resource.baseUrl ?? undefined,
+    resource.authIndex,
+    resource.prefix ?? undefined
   );
 };
 

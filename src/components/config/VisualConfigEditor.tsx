@@ -194,6 +194,10 @@ export function VisualConfigEditor({
   const isMobile = useMediaQuery('(max-width: 768px)');
   const routingStrategyLabelId = useId();
   const routingStrategyHintId = `${routingStrategyLabelId}-hint`;
+  const stickyTTLInputId = useId();
+  const quotaRefreshIntervalInputId = useId();
+  const quotaRefreshIntervalHintId = `${quotaRefreshIntervalInputId}-hint`;
+  const quotaRefreshIntervalErrorId = `${quotaRefreshIntervalInputId}-error`;
   const disableImageGenerationLabelId = useId();
   const disableImageGenerationHintId = `${disableImageGenerationLabelId}-hint`;
   const keepaliveInputId = useId();
@@ -351,6 +355,11 @@ export function VisualConfigEditor({
   const requestRetryError = getValidationMessage(t, validationErrors?.requestRetry);
   const maxRetryCredentialsError = getValidationMessage(t, validationErrors?.maxRetryCredentials);
   const maxRetryIntervalError = getValidationMessage(t, validationErrors?.maxRetryInterval);
+  const quotaCacheRefreshIntervalError = getValidationMessage(
+    t,
+    validationErrors?.quotaCacheRefreshInterval
+  );
+  const routingStickyTTLError = getValidationMessage(t, validationErrors?.routingStickyTTL);
   const authAutoRefreshWorkersError = getValidationMessage(
     t,
     validationErrors?.authAutoRefreshWorkers
@@ -437,6 +446,7 @@ export function VisualConfigEditor({
           'requestRetry',
           'maxRetryCredentials',
           'maxRetryInterval',
+          'routingStickyTTL',
           'authAutoRefreshWorkers',
         ]),
       },
@@ -454,7 +464,7 @@ export function VisualConfigEditor({
         id: 'quota',
         title: t('config_management.visual.sections.quota.title'),
         icon: IconTimer,
-        errorCount: 0,
+        errorCount: countErrors(['quotaCacheRefreshInterval']),
       },
       {
         id: 'streaming',
@@ -1137,6 +1147,12 @@ export function VisualConfigEditor({
                             ),
                           },
                           {
+                            value: 'sticky-round-robin',
+                            label: t(
+                              'config_management.visual.sections.network.strategy_sticky_round_robin'
+                            ),
+                          },
+                          {
                             value: 'fill-first',
                             label: t(
                               'config_management.visual.sections.network.strategy_fill_first'
@@ -1155,6 +1171,21 @@ export function VisualConfigEditor({
                       />
                     </FieldShell>
                   </FieldAnchor>
+                  {values.routingStrategy === 'sticky-round-robin' ? (
+                    <FieldAnchor fieldId="routingStickyTTL">
+                      <Input
+                        id={stickyTTLInputId}
+                        label={t('config_management.visual.sections.network.sticky_ttl')}
+                        type="number"
+                        placeholder="1800"
+                        value={values.routingStickyTTL}
+                        onChange={(e) => onChange({ routingStickyTTL: e.target.value })}
+                        disabled={disabled}
+                        hint={t('config_management.visual.sections.network.sticky_ttl_hint')}
+                        error={routingStickyTTLError}
+                      />
+                    </FieldAnchor>
+                  ) : null}
                   <FieldAnchor fieldId="disableImageGeneration">
                     <FieldShell
                       label={t(
@@ -1354,18 +1385,49 @@ export function VisualConfigEditor({
               title={t('config_management.visual.sections.quota.title')}
               description={t('config_management.visual.sections.quota.description')}
             >
-              <SectionGrid>
-                {quotaSwitchProjectToggle}
-                {quotaSwitchPreviewModelToggle}
-                <FieldAnchor fieldId="quotaAntigravityCredits">
-                  <ToggleRow
-                    title={t('config_management.visual.sections.quota.antigravity_credits')}
-                    checked={values.quotaAntigravityCredits}
-                    disabled={disabled}
-                    onChange={(quotaAntigravityCredits) => onChange({ quotaAntigravityCredits })}
-                  />
-                </FieldAnchor>
-              </SectionGrid>
+              <SectionStack>
+                <SectionGrid>
+                  <FieldAnchor fieldId="quotaCacheRefreshInterval">
+                    <FieldShell
+                      label={t('config_management.visual.sections.quota.refresh_interval')}
+                      htmlFor={quotaRefreshIntervalInputId}
+                      hint={t('config_management.visual.sections.quota.refresh_interval_hint')}
+                      hintId={quotaRefreshIntervalHintId}
+                      error={quotaCacheRefreshIntervalError}
+                      errorId={quotaRefreshIntervalErrorId}
+                    >
+                      <input
+                        id={quotaRefreshIntervalInputId}
+                        className="input"
+                        type="number"
+                        placeholder="3600"
+                        value={values.quotaCacheRefreshInterval}
+                        onChange={(e) => onChange({ quotaCacheRefreshInterval: e.target.value })}
+                        disabled={disabled}
+                        aria-describedby={
+                          quotaCacheRefreshIntervalError
+                            ? `${quotaRefreshIntervalErrorId} ${quotaRefreshIntervalHintId}`
+                            : quotaRefreshIntervalHintId
+                        }
+                        aria-invalid={quotaCacheRefreshIntervalError ? true : undefined}
+                      />
+                    </FieldShell>
+                  </FieldAnchor>
+                </SectionGrid>
+
+                <SectionGrid>
+                  {quotaSwitchProjectToggle}
+                  {quotaSwitchPreviewModelToggle}
+                  <FieldAnchor fieldId="quotaAntigravityCredits">
+                    <ToggleRow
+                      title={t('config_management.visual.sections.quota.antigravity_credits')}
+                      checked={values.quotaAntigravityCredits}
+                      disabled={disabled}
+                      onChange={(quotaAntigravityCredits) => onChange({ quotaAntigravityCredits })}
+                    />
+                  </FieldAnchor>
+                </SectionGrid>
+              </SectionStack>
             </ConfigSection>
 
             <ConfigSection
