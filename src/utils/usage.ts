@@ -68,6 +68,8 @@ export interface UsageDetail {
     reasoning_tokens: number;
     cached_tokens: number;
     cache_tokens?: number;
+    cache_read_tokens?: number;
+    cache_creation_tokens?: number;
     total_tokens: number;
   };
   failed: boolean;
@@ -268,6 +270,100 @@ export const normalizeAuthIndex = (value: unknown) => {
   }
   return null;
 };
+
+type UsageTokenAggregate = {
+  input_tokens: number;
+  output_tokens: number;
+  reasoning_tokens: number;
+  cached_tokens: number;
+  cache_tokens: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
+  total_tokens: number;
+};
+
+const createTokenAggregate = (): UsageTokenAggregate => ({
+  input_tokens: 0,
+  output_tokens: 0,
+  reasoning_tokens: 0,
+  cached_tokens: 0,
+  cache_tokens: 0,
+  cache_read_tokens: 0,
+  cache_creation_tokens: 0,
+  total_tokens: 0,
+});
+
+const toNonNegativeTokenValue = (value: unknown): number => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? Math.max(parsed, 0) : 0;
+};
+
+const hasAnyTokenAggregateField = (record: Record<string, unknown>): boolean =>
+  [
+    'input_tokens',
+    'output_tokens',
+    'reasoning_tokens',
+    'cached_tokens',
+    'cache_tokens',
+    'cache_read_tokens',
+    'cache_creation_tokens',
+    'total_tokens',
+  ].some((key) => Object.prototype.hasOwnProperty.call(record, key));
+
+const readTokenAggregate = (value: unknown): UsageTokenAggregate | null => {
+  if (!isRecord(value) || !hasAnyTokenAggregateField(value)) return null;
+  return {
+    input_tokens: toNonNegativeTokenValue(value.input_tokens),
+    output_tokens: toNonNegativeTokenValue(value.output_tokens),
+    reasoning_tokens: toNonNegativeTokenValue(value.reasoning_tokens),
+    cached_tokens: toNonNegativeTokenValue(value.cached_tokens),
+    cache_tokens: toNonNegativeTokenValue(value.cache_tokens),
+    cache_read_tokens: toNonNegativeTokenValue(value.cache_read_tokens),
+    cache_creation_tokens: toNonNegativeTokenValue(value.cache_creation_tokens),
+    total_tokens: toNonNegativeTokenValue(value.total_tokens),
+  };
+};
+
+const addTokenAggregate = (
+  left: UsageTokenAggregate,
+  right: UsageTokenAggregate
+): UsageTokenAggregate => ({
+  input_tokens: left.input_tokens + right.input_tokens,
+  output_tokens: left.output_tokens + right.output_tokens,
+  reasoning_tokens: left.reasoning_tokens + right.reasoning_tokens,
+  cached_tokens: left.cached_tokens + right.cached_tokens,
+  cache_tokens: left.cache_tokens + right.cache_tokens,
+  cache_read_tokens: left.cache_read_tokens + right.cache_read_tokens,
+  cache_creation_tokens: left.cache_creation_tokens + right.cache_creation_tokens,
+  total_tokens: left.total_tokens + right.total_tokens,
+});
+
+const getUsageTokenAggregate = (usageData: unknown): UsageTokenAggregate | null => {
+  const usageRecord = isRecord(usageData) ? usageData : null;
+  const direct = readTokenAggregate(usageRecord?.tokens);
+  if (direct) return direct;
+
+  const apis = getApisRecord(usageData);
+  if (!apis) return null;
+
+  let aggregate = createTokenAggregate();
+  let hasAggregate = false;
+  Object.values(apis).forEach((apiEntry) => {
+    const apiRecord = isRecord(apiEntry) ? apiEntry : null;
+    const apiTokens = readTokenAggregate(apiRecord?.tokens);
+    if (!apiTokens) return;
+    aggregate = addTokenAggregate(aggregate, apiTokens);
+    hasAggregate = true;
+  });
+  return hasAggregate ? aggregate : null;
+};
+
+const getCachedTokenValue = (tokens: UsageTokenAggregate): number =>
+  Math.max(
+    tokens.cached_tokens,
+    tokens.cache_tokens,
+    tokens.cache_read_tokens + tokens.cache_creation_tokens
+  );
 
 const USAGE_SOURCE_PREFIX_KEY = 'k:';
 const USAGE_SOURCE_PREFIX_MASKED = 'm:';
@@ -732,6 +828,14 @@ export function calculateLatencyStats(usageData: unknown): LatencyStats {
  * 计算 token 分类统计
  */
 export function calculateTokenBreakdown(usageData: unknown): TokenBreakdown {
+  const aggregate = getUsageTokenAggregate(usageData);
+  if (aggregate) {
+    return {
+      cachedTokens: getCachedTokenValue(aggregate),
+      reasoningTokens: aggregate.reasoning_tokens,
+    };
+  }
+
   const details = collectUsageDetails(usageData);
   if (!details.length) {
     return { cachedTokens: 0, reasoningTokens: 0 };
@@ -744,7 +848,11 @@ export function calculateTokenBreakdown(usageData: unknown): TokenBreakdown {
     const tokens = detail.tokens;
     cachedTokens += Math.max(
       typeof tokens.cached_tokens === 'number' ? Math.max(tokens.cached_tokens, 0) : 0,
-      typeof tokens.cache_tokens === 'number' ? Math.max(tokens.cache_tokens, 0) : 0
+      typeof tokens.cache_tokens === 'number' ? Math.max(tokens.cache_tokens, 0) : 0,
+      (typeof tokens.cache_read_tokens === 'number' ? Math.max(tokens.cache_read_tokens, 0) : 0) +
+        (typeof tokens.cache_creation_tokens === 'number'
+          ? Math.max(tokens.cache_creation_tokens, 0)
+          : 0)
     );
     if (typeof tokens.reasoning_tokens === 'number') {
       reasoningTokens += tokens.reasoning_tokens;
@@ -1138,8 +1246,7 @@ export function getModelStats(
         averageLatencyMs: latencyStats.averageMs,
         totalLatencyMs: latencyStats.totalMs,
         latencySampleCount: latencyStats.sampleCount,
-        averageChunkCount:
-          metricDenominator > 0 ? stats.chunkCount / metricDenominator : null,
+        averageChunkCount: metricDenominator > 0 ? stats.chunkCount / metricDenominator : null,
         averageResponseBytes:
           metricDenominator > 0 ? stats.responseBytes / metricDenominator : null,
         averageAPIResponseBytes:

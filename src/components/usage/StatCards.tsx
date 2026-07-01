@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/icons';
 import {
   LATENCY_SOURCE_FIELD,
+  calculateTokenBreakdown,
   calculateLatencyStatsFromDetails,
   calculateCost,
   formatBytes,
@@ -83,13 +84,14 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
     };
 
     if (!usage) return empty;
+    const tokenBreakdown = calculateTokenBreakdown(usage);
     const details = collectUsageDetails(usage);
-    if (!details.length) return empty;
+    if (!details.length) {
+      return { ...empty, tokenBreakdown };
+    }
 
     const latencyStats = calculateLatencyStatsFromDetails(details);
 
-    let cachedTokens = 0;
-    let reasoningTokens = 0;
     let totalCost = 0;
     let chunkCount = 0;
     let responseBytes = 0;
@@ -103,14 +105,6 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
     const hasValidNow = Number.isFinite(now) && now > 0;
 
     details.forEach((detail) => {
-      const tokens = detail.tokens;
-      cachedTokens += Math.max(
-        typeof tokens.cached_tokens === 'number' ? Math.max(tokens.cached_tokens, 0) : 0,
-        typeof tokens.cache_tokens === 'number' ? Math.max(tokens.cache_tokens, 0) : 0
-      );
-      if (typeof tokens.reasoning_tokens === 'number') {
-        reasoningTokens += tokens.reasoning_tokens;
-      }
       chunkCount +=
         typeof detail.chunk_count === 'number' && Number.isFinite(detail.chunk_count)
           ? Math.max(detail.chunk_count, 0)
@@ -142,7 +136,7 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
 
     const denominator = windowMinutes > 0 ? windowMinutes : 1;
     return {
-      tokenBreakdown: { cachedTokens, reasoningTokens },
+      tokenBreakdown,
       rateStats: {
         rpm: requestCount / denominator,
         tpm: tokenCount / denominator,
@@ -181,7 +175,8 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
           </span>
           {latencyStats.sampleCount > 0 && (
             <span className={styles.statMetaItem} title={latencyHint}>
-              {t('usage_stats.avg_time')}: {loading ? '-' : formatDurationMs(latencyStats.averageMs)}
+              {t('usage_stats.avg_time')}:{' '}
+              {loading ? '-' : formatDurationMs(latencyStats.averageMs)}
             </span>
           )}
         </>
@@ -199,7 +194,8 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       meta: (
         <>
           <span className={styles.statMetaItem}>
-            {t('usage_stats.total_requests')}: {loading ? '-' : (usage?.total_requests ?? 0).toLocaleString()}
+            {t('usage_stats.total_requests')}:{' '}
+            {loading ? '-' : (usage?.total_requests ?? 0).toLocaleString()}
           </span>
           <span className={styles.statMetaItem}>
             {t('usage_stats.avg_chunk_per_request')}:{' '}
@@ -220,14 +216,18 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       accent: '#14b8a6',
       accentSoft: 'rgba(20, 184, 166, 0.18)',
       accentBorder: 'rgba(20, 184, 166, 0.32)',
-      value: loading ? '-' : formatBytes(requestMetrics.responseBytes + requestMetrics.apiResponseBytes),
+      value: loading
+        ? '-'
+        : formatBytes(requestMetrics.responseBytes + requestMetrics.apiResponseBytes),
       meta: (
         <>
           <span className={styles.statMetaItem}>
-            {t('usage_stats.response_bytes')}: {loading ? '-' : formatBytes(requestMetrics.responseBytes)}
+            {t('usage_stats.response_bytes')}:{' '}
+            {loading ? '-' : formatBytes(requestMetrics.responseBytes)}
           </span>
           <span className={styles.statMetaItem}>
-            {t('usage_stats.api_response_bytes')}: {loading ? '-' : formatBytes(requestMetrics.apiResponseBytes)}
+            {t('usage_stats.api_response_bytes')}:{' '}
+            {loading ? '-' : formatBytes(requestMetrics.apiResponseBytes)}
           </span>
         </>
       ),
@@ -244,10 +244,12 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       meta: (
         <>
           <span className={styles.statMetaItem}>
-            {t('usage_stats.cached_tokens')}: {loading ? '-' : formatCompactNumber(tokenBreakdown.cachedTokens)}
+            {t('usage_stats.cached_tokens')}:{' '}
+            {loading ? '-' : formatCompactNumber(tokenBreakdown.cachedTokens)}
           </span>
           <span className={styles.statMetaItem}>
-            {t('usage_stats.reasoning_tokens')}: {loading ? '-' : formatCompactNumber(tokenBreakdown.reasoningTokens)}
+            {t('usage_stats.reasoning_tokens')}:{' '}
+            {loading ? '-' : formatCompactNumber(tokenBreakdown.reasoningTokens)}
           </span>
         </>
       ),
@@ -263,7 +265,8 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       value: loading ? '-' : formatPerMinuteValue(rateStats.rpm),
       meta: (
         <span className={styles.statMetaItem}>
-          {t('usage_stats.total_requests')}: {loading ? '-' : rateStats.requestCount.toLocaleString()}
+          {t('usage_stats.total_requests')}:{' '}
+          {loading ? '-' : rateStats.requestCount.toLocaleString()}
         </span>
       ),
       trend: sparklines.rpm,
@@ -278,7 +281,8 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       value: loading ? '-' : formatPerMinuteValue(rateStats.tpm),
       meta: (
         <span className={styles.statMetaItem}>
-          {t('usage_stats.total_tokens')}: {loading ? '-' : formatCompactNumber(rateStats.tokenCount)}
+          {t('usage_stats.total_tokens')}:{' '}
+          {loading ? '-' : formatCompactNumber(rateStats.tokenCount)}
         </span>
       ),
       trend: sparklines.tpm,
@@ -294,7 +298,8 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       meta: (
         <>
           <span className={styles.statMetaItem}>
-            {t('usage_stats.total_tokens')}: {loading ? '-' : formatCompactNumber(usage?.total_tokens ?? 0)}
+            {t('usage_stats.total_tokens')}:{' '}
+            {loading ? '-' : formatCompactNumber(usage?.total_tokens ?? 0)}
           </span>
           {!hasPrices && (
             <span className={`${styles.statMetaItem} ${styles.statSubtle}`}>
