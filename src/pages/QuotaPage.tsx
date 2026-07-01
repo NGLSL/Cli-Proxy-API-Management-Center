@@ -1,20 +1,19 @@
 /**
- * Quota management page - coordinates the quota sections.
+ * Quota management page - coordinates the three quota sections.
  */
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
-import { useAuthStore, useQuotaStore } from '@/stores';
-import { authFilesApi, configFileApi, quotaCacheApi } from '@/services/api';
+import { useAuthStore } from '@/stores';
+import { authFilesApi } from '@/services/api';
 import {
   QuotaSection,
   ANTIGRAVITY_CONFIG,
   CLAUDE_CONFIG,
   CODEX_CONFIG,
-  GEMINI_CLI_CONFIG,
   KIMI_CONFIG,
-  buildQuotaStoresFromSnapshot,
+  XAI_CONFIG,
 } from '@/components/quota';
 import type { AuthFileItem } from '@/types';
 import styles from './QuotaPage.module.scss';
@@ -22,36 +21,12 @@ import styles from './QuotaPage.module.scss';
 export function QuotaPage() {
   const { t } = useTranslation();
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
-  const setAntigravityQuota = useQuotaStore((state) => state.setAntigravityQuota);
-  const setClaudeQuota = useQuotaStore((state) => state.setClaudeQuota);
-  const setCodexQuota = useQuotaStore((state) => state.setCodexQuota);
-  const setGeminiCliQuota = useQuotaStore((state) => state.setGeminiCliQuota);
-  const setKimiQuota = useQuotaStore((state) => state.setKimiQuota);
 
   const [files, setFiles] = useState<AuthFileItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const disableControls = connectionStatus !== 'connected';
-
-  const hydrateQuotaSnapshot = useCallback(async () => {
-    const snapshot = await quotaCacheApi.getSnapshot();
-    const stores = buildQuotaStoresFromSnapshot(snapshot, t);
-    setAntigravityQuota(stores.antigravityQuota);
-    setClaudeQuota(stores.claudeQuota);
-    setCodexQuota(stores.codexQuota);
-    setGeminiCliQuota(stores.geminiCliQuota);
-    setKimiQuota(stores.kimiQuota);
-  }, [setAntigravityQuota, setClaudeQuota, setCodexQuota, setGeminiCliQuota, setKimiQuota, t]);
-
-  const loadConfig = useCallback(async () => {
-    try {
-      await configFileApi.fetchConfigYaml();
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : t('notification.refresh_failed');
-      setError((prev) => prev || errorMessage);
-    }
-  }, [t]);
 
   const loadFiles = useCallback(async () => {
     setLoading(true);
@@ -67,24 +42,11 @@ export function QuotaPage() {
     }
   }, [t]);
 
-  const loadQuotaSnapshot = useCallback(async () => {
-    try {
-      await hydrateQuotaSnapshot();
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : t('notification.refresh_failed');
-      setError((prev) => prev || errorMessage);
-    }
-  }, [hydrateQuotaSnapshot, t]);
-
-  const handleHeaderRefresh = useCallback(async () => {
-    await Promise.all([loadConfig(), loadFiles(), loadQuotaSnapshot()]);
-  }, [loadConfig, loadFiles, loadQuotaSnapshot]);
-
-  useHeaderRefresh(handleHeaderRefresh);
+  useHeaderRefresh(loadFiles);
 
   useEffect(() => {
-    void handleHeaderRefresh();
-  }, [handleHeaderRefresh]);
+    loadFiles();
+  }, [loadFiles]);
 
   return (
     <div className={styles.container}>
@@ -114,7 +76,7 @@ export function QuotaPage() {
         disabled={disableControls}
       />
       <QuotaSection
-        config={GEMINI_CLI_CONFIG}
+        config={XAI_CONFIG}
         files={files}
         loading={loading}
         disabled={disableControls}

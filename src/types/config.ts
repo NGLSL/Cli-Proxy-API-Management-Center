@@ -4,7 +4,6 @@
  */
 
 import type { GeminiKeyConfig, ProviderKeyConfig, OpenAIProviderConfig } from './provider';
-import type { AmpcodeConfig } from './ampcode';
 
 export interface QuotaExceededConfig {
   switchProject?: boolean;
@@ -16,19 +15,14 @@ export interface Config {
   debug?: boolean;
   proxyUrl?: string;
   requestRetry?: number;
-  forwardRequestHeaders?: Record<string, string>;
   quotaExceeded?: QuotaExceededConfig;
-  usageStatisticsEnabled?: boolean;
   requestLog?: boolean;
   loggingToFile?: boolean;
   logsMaxTotalSizeMb?: number;
   wsAuth?: boolean;
   forceModelPrefix?: boolean;
   routingStrategy?: string;
-  routingStickyTTL?: number;
-  routingSourcePreference?: string;
   apiKeys?: string[];
-  ampcode?: AmpcodeConfig;
   geminiApiKeys?: GeminiKeyConfig[];
   codexApiKeys?: ProviderKeyConfig[];
   claudeApiKeys?: ProviderKeyConfig[];
@@ -42,19 +36,14 @@ export type RawConfigSection =
   | 'debug'
   | 'proxy-url'
   | 'request-retry'
-  | 'forward-request-headers'
   | 'quota-exceeded'
-  | 'usage-statistics-enabled'
   | 'request-log'
   | 'logging-to-file'
   | 'logs-max-total-size-mb'
   | 'ws-auth'
   | 'force-model-prefix'
   | 'routing/strategy'
-  | 'routing/sticky-ttl'
-  | 'routing/source-preference'
   | 'api-keys'
-  | 'ampcode'
   | 'gemini-api-key'
   | 'codex-api-key'
   | 'claude-api-key'

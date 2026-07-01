@@ -1,13 +1,3 @@
-/**
- * PluginResourcePage（v7 引入）
- *
- * 插件通过 menus 字段向 UI 暴露多个"资源页面"（通常是 iframe 嵌入的后端路径）。
- * 本页根据 URL 中的 pluginId + menuIndex 找到对应菜单，把 path 渲染成 iframe。
- *
- * 资源刷新事件：当 PluginsPage 启用/禁用/安装/删除插件后，会派发
- * PLUGIN_RESOURCES_REFRESH_EVENT，本页监听后重新拉取 /plugins 列表，
- * 以便菜单 path 变化时立即生效。
- */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -24,11 +14,8 @@ import {
 } from './pluginResources';
 import styles from './PluginResourcePage.module.scss';
 
-// 后端抛 404 时认为是 error.status === 404（apiClient 包装）
-const hasStatus = (error: unknown, status: number) =>
-  isRecord(error) && error.status === status;
+const hasStatus = (error: unknown, status: number) => isRecord(error) && error.status === status;
 
-// 防止后端返回非法的 encodeURIComponent 序列
 const safeDecodeURIComponent = (value = '') => {
   try {
     return decodeURIComponent(value);
@@ -53,14 +40,8 @@ export function PluginResourcePage() {
   const [error, setError] = useState('');
 
   const connected = connectionStatus === 'connected';
-  const pluginID = useMemo(
-    () => safeDecodeURIComponent(params.pluginId),
-    [params.pluginId]
-  );
-  const menuIndex = useMemo(
-    () => parseMenuIndex(params.menuIndex),
-    [params.menuIndex]
-  );
+  const pluginID = useMemo(() => safeDecodeURIComponent(params.pluginId), [params.pluginId]);
+  const menuIndex = useMemo(() => parseMenuIndex(params.menuIndex), [params.menuIndex]);
 
   const loadResource = useCallback(async () => {
     if (!connected) {
@@ -85,14 +66,12 @@ export function PluginResourcePage() {
     }
   }, [connected, t]);
 
-  // 注册到顶栏刷新按钮
   useHeaderRefresh(loadResource, connected);
 
   useEffect(() => {
     void loadResource();
   }, [loadResource]);
 
-  // 监听全局资源刷新事件（PluginsPage 安装/启用/删除后会派发）
   useEffect(() => {
     window.addEventListener(PLUGIN_RESOURCES_REFRESH_EVENT, loadResource);
 
@@ -101,7 +80,6 @@ export function PluginResourcePage() {
     };
   }, [loadResource]);
 
-  // 在标准化后的 plugins 上展开 menus，找到匹配当前路由的那一项
   const resource = useMemo(() => {
     const entries = collectPluginResourceEntries(data?.plugins ?? []);
     return entries.find((entry) => entry.pluginID === pluginID && entry.menuIndex === menuIndex);

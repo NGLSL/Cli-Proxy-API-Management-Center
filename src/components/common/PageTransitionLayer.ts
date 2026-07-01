@@ -7,8 +7,9 @@ export type PageTransitionLayerContextValue = {
   isCurrentLayer: boolean;
 };
 
-export const PageTransitionLayerContext =
-  createContext<PageTransitionLayerContextValue | null>(null);
+export const PageTransitionLayerContext = createContext<PageTransitionLayerContextValue | null>(
+  null
+);
 
 export const PAGE_TRANSITION_LAYER_CONTEXT_VALUES: Record<LayerStatus, PageTransitionLayerContextValue> = {
   current: { status: 'current', isCurrentLayer: true },

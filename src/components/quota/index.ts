@@ -9,9 +9,7 @@ export {
   ANTIGRAVITY_CONFIG,
   CLAUDE_CONFIG,
   CODEX_CONFIG,
-  GEMINI_CLI_CONFIG,
   KIMI_CONFIG,
-  buildQuotaStateMapFromEntries,
-  buildQuotaStoresFromSnapshot,
+  XAI_CONFIG,
 } from './quotaConfigs';
 export type { QuotaConfig } from './quotaConfigs';

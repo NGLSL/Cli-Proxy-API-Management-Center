@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { authFilesApi } from '@/services/api';
 import { apiClient } from '@/services/api/client';
 import { useNotificationStore } from '@/stores';
-import type { AuthFileBatchFailure, AuthFileBatchSkipped, AuthFileItem } from '@/types';
+import type { AuthFileItem } from '@/types';
 import { formatFileSize } from '@/utils/format';
 import { MAX_AUTH_FILE_SIZE } from '@/utils/constants';
 import { downloadBlob } from '@/utils/download';
@@ -11,13 +11,18 @@ import {
   getTypeLabel,
   hasAuthFileStatusMessage,
   isRuntimeOnlyAuthFile,
+  normalizeProviderKey,
 } from '@/features/authFiles/constants';
 
 type DeleteAllOptions = {
   filter: string;
   problemOnly: boolean;
+  disabledOnly: boolean;
+  enabledOnly: boolean;
   onResetFilterToAll: () => void;
   onResetProblemOnly: () => void;
+  onResetDisabledOnly: () => void;
+  onResetEnabledOnly: () => void;
 };
 
 export type UseAuthFilesDataResult = {
@@ -31,8 +36,6 @@ export type UseAuthFilesDataResult = {
   deletingAll: boolean;
   statusUpdating: Record<string, boolean>;
   batchStatusUpdating: boolean;
-  batchWebsocketUpdating: boolean;
-  allActionUpdating: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
   loadFiles: () => Promise<void>;
   handleUploadClick: () => void;
@@ -47,18 +50,10 @@ export type UseAuthFilesDataResult = {
   deselectAll: () => void;
   batchDownload: (names: string[]) => Promise<void>;
   batchSetStatus: (names: string[], enabled: boolean) => Promise<void>;
-  batchSetWebsockets: (names: string[], enabled: boolean) => Promise<void>;
-  setAllStatus: (enabled: boolean) => Promise<void>;
-  setAllWebsockets: (enabled: boolean) => Promise<void>;
   batchDelete: (names: string[]) => void;
 };
 
-export type UseAuthFilesDataOptions = {
-  refreshKeyStats: () => Promise<void>;
-};
-
-export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFilesDataResult {
-  const { refreshKeyStats } = options;
+export function useAuthFilesData(): UseAuthFilesDataResult {
   const { t } = useTranslation();
   const { showNotification, showConfirmation } = useNotificationStore();
 
@@ -70,8 +65,6 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
   const [deletingAll, setDeletingAll] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState<Record<string, boolean>>({});
   const [batchStatusUpdating, setBatchStatusUpdating] = useState(false);
-  const [batchWebsocketUpdating, setBatchWebsocketUpdating] = useState(false);
-  const [allActionUpdating, setAllActionUpdating] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -125,13 +118,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
   }, []);
 
   const applyDeletedFiles = useCallback((names: string[]) => {
-    const deletedNames = Array.from(
-      new Set(
-        names
-          .map((name) => name.trim())
-          .filter(Boolean)
-      )
-    );
+    const deletedNames = Array.from(new Set(names.map((name) => name.trim()).filter(Boolean)));
     if (deletedNames.length === 0) return;
 
     const deletedSet = new Set(deletedNames);
@@ -150,44 +137,6 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
       return changed ? next : prev;
     });
   }, []);
-
-  const applyFieldUpdates = useCallback((updatedNames: string[], patch: Partial<AuthFileItem>) => {
-    if (updatedNames.length === 0) return;
-    const updatedSet = new Set(updatedNames.map((name) => name.trim()).filter(Boolean));
-    if (updatedSet.size === 0) return;
-    setFiles((prev) =>
-      prev.map((file) => (updatedSet.has(file.name) ? { ...file, ...patch } : file))
-    );
-  }, []);
-
-  const summarizePatchResult = useCallback(
-    (
-      result: {
-        updated: string[];
-        skipped: AuthFileBatchSkipped[];
-        failed: AuthFileBatchFailure[];
-      },
-      successMessage: string
-    ) => {
-      const updated = result.updated.length;
-      const skipped = result.skipped.length;
-      const failed = result.failed.length;
-
-      if (failed === 0 && skipped === 0) {
-        showNotification(successMessage, 'success');
-        return;
-      }
-
-      const parts = [
-        successMessage,
-        `updated: ${updated}`,
-        `skipped: ${skipped}`,
-        `failed: ${failed}`,
-      ];
-      showNotification(parts.join(' | '), failed > 0 ? 'warning' : 'info');
-    },
-    [showNotification]
-  );
 
   useEffect(() => {
     if (selectedFiles.size === 0) return;
@@ -273,13 +222,10 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
             result.failed.length ? 'warning' : 'success'
           );
           await loadFiles();
-          await refreshKeyStats();
         }
 
         if (result.failed.length > 0) {
-          const details = result.failed
-            .map((item) => `${item.name}: ${item.error}`)
-            .join('; ');
+          const details = result.failed.map((item) => `${item.name}: ${item.error}`).join('; ');
           showNotification(`${t('notification.upload_failed')}: ${details}`, 'error');
         }
       } catch (err: unknown) {
@@ -290,7 +236,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
         event.target.value = '';
       }
     },
-    [loadFiles, refreshKeyStats, showNotification, t]
+    [loadFiles, showNotification, t]
   );
 
   const handleDelete = useCallback(
@@ -320,17 +266,31 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
 
   const handleDeleteAll = useCallback(
     (deleteAllOptions: DeleteAllOptions) => {
-      const { filter, problemOnly, onResetFilterToAll, onResetProblemOnly } = deleteAllOptions;
+      const {
+        filter,
+        problemOnly,
+        disabledOnly,
+        enabledOnly,
+        onResetFilterToAll,
+        onResetProblemOnly,
+        onResetDisabledOnly,
+        onResetEnabledOnly,
+      } = deleteAllOptions;
       const isFiltered = filter !== 'all';
       const isProblemOnly = problemOnly === true;
+      const isDisabledOnly = disabledOnly === true;
+      const isEnabledOnly = enabledOnly === true;
       const typeLabel = isFiltered ? getTypeLabel(t, filter) : t('auth_files.filter_all');
-      const confirmMessage = isProblemOnly
-        ? isFiltered
+      let confirmMessage = t('auth_files.delete_all_confirm');
+      if (isDisabledOnly || isEnabledOnly) {
+        confirmMessage = t('auth_files.delete_filtered_result_confirm');
+      } else if (isProblemOnly) {
+        confirmMessage = isFiltered
           ? t('auth_files.delete_problem_filtered_confirm', { type: typeLabel })
-          : t('auth_files.delete_problem_confirm')
-        : isFiltered
-          ? t('auth_files.delete_filtered_confirm', { type: typeLabel })
-          : t('auth_files.delete_all_confirm');
+          : t('auth_files.delete_problem_confirm');
+      } else if (isFiltered) {
+        confirmMessage = t('auth_files.delete_filtered_confirm', { type: typeLabel });
+      }
 
       showConfirmation({
         title: t('auth_files.delete_all_title', { defaultValue: 'Delete All Files' }),
@@ -340,7 +300,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
         onConfirm: async () => {
           setDeletingAll(true);
           try {
-            if (!isFiltered && !isProblemOnly) {
+            if (!isFiltered && !isProblemOnly && !isDisabledOnly && !isEnabledOnly) {
               await authFilesApi.deleteAll();
               showNotification(t('auth_files.delete_all_success'), 'success');
               setFiles((prev) => prev.filter((file) => isRuntimeOnlyAuthFile(file)));
@@ -348,31 +308,44 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
             } else {
               const filesToDelete = files.filter((file) => {
                 if (isRuntimeOnlyAuthFile(file)) return false;
-                if (isFiltered && file.type !== filter) return false;
+                if (
+                  isFiltered &&
+                  normalizeProviderKey(String(file.type ?? file.provider ?? '')) !== filter
+                ) {
+                  return false;
+                }
                 if (isProblemOnly && !hasAuthFileStatusMessage(file)) return false;
+                if (isDisabledOnly && file.disabled !== true) return false;
+                if (isEnabledOnly && file.disabled === true) return false;
                 return true;
               });
 
               if (filesToDelete.length === 0) {
-                const emptyMessage = isProblemOnly
-                  ? isFiltered
+                let emptyMessage = t('auth_files.delete_filtered_none', { type: typeLabel });
+                if (isDisabledOnly || isEnabledOnly) {
+                  emptyMessage = t('auth_files.delete_filtered_result_none');
+                } else if (isProblemOnly) {
+                  emptyMessage = isFiltered
                     ? t('auth_files.delete_problem_filtered_none', { type: typeLabel })
-                    : t('auth_files.delete_problem_none')
-                  : t('auth_files.delete_filtered_none', { type: typeLabel });
+                    : t('auth_files.delete_problem_none');
+                }
                 showNotification(emptyMessage, 'info');
                 setDeletingAll(false);
                 return;
               }
 
-              const result = await authFilesApi.deleteFiles(
-                filesToDelete.map((file) => file.name)
-              );
+              const result = await authFilesApi.deleteFiles(filesToDelete.map((file) => file.name));
               const success = result.deleted;
               const failed = result.failed.length;
 
               applyDeletedFiles(result.files);
 
-              if (failed === 0 && isProblemOnly) {
+              if (failed === 0 && (isDisabledOnly || isEnabledOnly)) {
+                showNotification(
+                  t('auth_files.delete_filtered_result_success', { count: success }),
+                  'success'
+                );
+              } else if (failed === 0 && isProblemOnly) {
                 showNotification(
                   isFiltered
                     ? t('auth_files.delete_problem_filtered_success', {
@@ -386,6 +359,11 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
                 showNotification(
                   t('auth_files.delete_filtered_success', { count: success, type: typeLabel }),
                   'success'
+                );
+              } else if (isDisabledOnly || isEnabledOnly) {
+                showNotification(
+                  t('auth_files.delete_filtered_result_partial', { success, failed }),
+                  'warning'
                 );
               } else if (isProblemOnly) {
                 showNotification(
@@ -410,6 +388,12 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
               }
               if (isProblemOnly) {
                 onResetProblemOnly();
+              }
+              if (isDisabledOnly) {
+                onResetDisabledOnly();
+              }
+              if (isEnabledOnly) {
+                onResetEnabledOnly();
               }
             }
           } catch (err: unknown) {
@@ -484,128 +468,95 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     async (names: string[], enabled: boolean) => {
       if (batchStatusPendingRef.current) return;
 
-      const targetNameList = Array.from(new Set(names.map((name) => name.trim()).filter(Boolean)));
+      const uniqueNames = Array.from(new Set(names));
+      if (uniqueNames.length === 0) return;
+      if (uniqueNames.some((name) => statusUpdating[name] === true)) return;
+
+      const originalDisabled = new Map(
+        files
+          .filter((file) => uniqueNames.includes(file.name))
+          .map((file) => [file.name, file.disabled === true])
+      );
+      const targetNames = new Set(originalDisabled.keys());
+      const targetNameList = Array.from(targetNames);
       if (targetNameList.length === 0) return;
-      if (targetNameList.some((name) => statusUpdating[name] === true)) return;
+
+      const nextDisabled = !enabled;
 
       batchStatusPendingRef.current = true;
       setBatchStatusUpdating(true);
-      const nextDisabled = !enabled;
+      setStatusUpdating((prev) => {
+        const next = { ...prev };
+        targetNameList.forEach((name) => {
+          next[name] = true;
+        });
+        return next;
+      });
+      setFiles((prev) =>
+        prev.map((file) =>
+          targetNames.has(file.name) ? { ...file, disabled: nextDisabled } : file
+        )
+      );
 
       try {
-        const result = await authFilesApi.setSelectedStatus(targetNameList, nextDisabled);
-        applyFieldUpdates(result.updated, { disabled: nextDisabled });
-        summarizePatchResult(
-          result,
-          enabled
-            ? t('auth_files.batch_enable_success', { count: result.updated.length })
-            : t('auth_files.batch_disable_success', { count: result.updated.length })
+        const results = await Promise.allSettled(
+          targetNameList.map((name) => authFilesApi.setStatus(name, nextDisabled))
         );
+
+        let successCount = 0;
+        let failCount = 0;
+        const failedNames = new Set<string>();
+        const confirmedDisabled = new Map<string, boolean>();
+
+        results.forEach((result, index) => {
+          const name = targetNameList[index];
+          if (result.status === 'fulfilled') {
+            successCount++;
+            confirmedDisabled.set(name, result.value.disabled);
+          } else {
+            failCount++;
+            failedNames.add(name);
+          }
+        });
+
+        setFiles((prev) =>
+          prev.map((file) => {
+            if (failedNames.has(file.name)) {
+              return { ...file, disabled: originalDisabled.get(file.name) === true };
+            }
+            if (confirmedDisabled.has(file.name)) {
+              return { ...file, disabled: confirmedDisabled.get(file.name) };
+            }
+            return file;
+          })
+        );
+
+        if (failCount === 0) {
+          showNotification(
+            t('auth_files.batch_status_success', { count: successCount }),
+            'success'
+          );
+        } else {
+          showNotification(
+            t('auth_files.batch_status_partial', { success: successCount, failed: failCount }),
+            'warning'
+          );
+        }
+
         deselectAll();
-      } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : '';
-        showNotification(`${t('notification.update_failed')}: ${errorMessage}`, 'error');
       } finally {
         batchStatusPendingRef.current = false;
         setBatchStatusUpdating(false);
+        setStatusUpdating((prev) => {
+          const next = { ...prev };
+          targetNameList.forEach((name) => {
+            delete next[name];
+          });
+          return next;
+        });
       }
     },
-    [applyFieldUpdates, deselectAll, showNotification, statusUpdating, summarizePatchResult, t]
-  );
-
-  const batchSetWebsockets = useCallback(
-    async (names: string[], enabled: boolean) => {
-      const targetNameList = Array.from(new Set(names.map((name) => name.trim()).filter(Boolean)));
-      if (targetNameList.length === 0 || batchWebsocketUpdating) return;
-
-      setBatchWebsocketUpdating(true);
-      try {
-        const result = await authFilesApi.setSelectedWebsockets(targetNameList, enabled);
-        applyFieldUpdates(result.updated, { websockets: enabled });
-        summarizePatchResult(
-          result,
-          enabled
-            ? t('auth_files.batch_websocket_enable_success', { count: result.updated.length })
-            : t('auth_files.batch_websocket_disable_success', { count: result.updated.length })
-        );
-        deselectAll();
-      } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : '';
-        showNotification(`${t('notification.update_failed')}: ${errorMessage}`, 'error');
-      } finally {
-        setBatchWebsocketUpdating(false);
-      }
-    },
-    [applyFieldUpdates, batchWebsocketUpdating, deselectAll, showNotification, summarizePatchResult, t]
-  );
-
-  const setAllStatus = useCallback(
-    async (enabled: boolean) => {
-      if (allActionUpdating) return;
-
-      showConfirmation({
-        title: t('auth_files.all_action_title'),
-        message: t('auth_files.all_status_confirm', {
-          action: enabled ? t('auth_files.batch_enable') : t('auth_files.batch_disable'),
-        }),
-        confirmText: t('common.confirm'),
-        onConfirm: async () => {
-          setAllActionUpdating(true);
-          const nextDisabled = !enabled;
-          try {
-            const result = await authFilesApi.setAllStatus(nextDisabled);
-            applyFieldUpdates(result.updated, { disabled: nextDisabled });
-            summarizePatchResult(
-              result,
-              enabled
-                ? t('auth_files.all_enable_success', { count: result.updated.length })
-                : t('auth_files.all_disable_success', { count: result.updated.length })
-            );
-            deselectAll();
-          } catch (err: unknown) {
-            const errorMessage = err instanceof Error ? err.message : '';
-            showNotification(`${t('notification.update_failed')}: ${errorMessage}`, 'error');
-          } finally {
-            setAllActionUpdating(false);
-          }
-        },
-      });
-    },
-    [allActionUpdating, applyFieldUpdates, deselectAll, showConfirmation, showNotification, summarizePatchResult, t]
-  );
-
-  const setAllWebsockets = useCallback(
-    async (enabled: boolean) => {
-      if (allActionUpdating) return;
-
-      showConfirmation({
-        title: t('auth_files.all_action_title'),
-        message: t('auth_files.all_websocket_confirm', {
-          action: enabled ? t('auth_files.websocket_enable') : t('auth_files.websocket_disable'),
-        }),
-        confirmText: t('common.confirm'),
-        onConfirm: async () => {
-          setAllActionUpdating(true);
-          try {
-            const result = await authFilesApi.setAllWebsockets(enabled);
-            applyFieldUpdates(result.updated, { websockets: enabled });
-            summarizePatchResult(
-              result,
-              enabled
-                ? t('auth_files.all_websocket_enable_success', { count: result.updated.length })
-                : t('auth_files.all_websocket_disable_success', { count: result.updated.length })
-            );
-            deselectAll();
-          } catch (err: unknown) {
-            const errorMessage = err instanceof Error ? err.message : '';
-            showNotification(`${t('notification.update_failed')}: ${errorMessage}`, 'error');
-          } finally {
-            setAllActionUpdating(false);
-          }
-        },
-      });
-    },
-    [allActionUpdating, applyFieldUpdates, deselectAll, showConfirmation, showNotification, summarizePatchResult, t]
+    [deselectAll, files, showNotification, statusUpdating, t]
   );
 
   const batchDownload = useCallback(
@@ -696,8 +647,6 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     deletingAll,
     statusUpdating,
     batchStatusUpdating,
-    batchWebsocketUpdating,
-    allActionUpdating,
     fileInputRef,
     loadFiles,
     handleUploadClick,
@@ -712,9 +661,6 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     deselectAll,
     batchDownload,
     batchSetStatus,
-    batchSetWebsockets,
-    setAllStatus,
-    setAllWebsockets,
     batchDelete,
   };
 }

@@ -4,6 +4,7 @@
 
 import { apiClient } from './client';
 import { LOGS_TIMEOUT_MS } from '@/utils/constants';
+import { isRecord } from '@/utils/helpers';
 
 export type LogCursor = number | string;
 export type LogBackendKind = 'unknown' | 'file' | 'home-db';
@@ -19,8 +20,6 @@ export interface CPALogsResponse {
   lines: string[];
   'line-count': number;
   'latest-timestamp': number;
-  'next-cursor'?: string;
-  'cursor-reset'?: boolean | string;
 }
 
 export interface HomeLogRecord {
@@ -64,9 +63,6 @@ export interface ErrorLogsResponse {
   files?: ErrorLogFile[];
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
-
 const stringValue = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
 const numberValue = (value: unknown): number | undefined => {
@@ -100,7 +96,8 @@ const unixSecondsFromValue = (value: unknown): number => {
 const homeCursorFromRecord = (record: HomeLogRecord): string => {
   const timestamp = stringValue(record.timestamp);
   if (timestamp) return timestamp;
-  return stringValue(record.created_at);
+  const createdAt = stringValue(record.created_at);
+  return createdAt;
 };
 
 const normalizeCPALogs = (data: Record<string, unknown>): LogsResponse => {
@@ -180,7 +177,6 @@ const fetchCompleteHomeLogs = async (
   const firstOffset = numberValue(firstPage.offset) ?? numberValue(params.offset) ?? 0;
   const records = homeRecordsFromPayload(firstPage);
 
-  // Home 后端按分页返回历史日志。这里在前端一次性补齐请求范围，避免日志页只显示第一页。
   if (requestedLimit === undefined || pageLimit === undefined || total === undefined) {
     return firstPage;
   }

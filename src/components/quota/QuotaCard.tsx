@@ -1,21 +1,23 @@
 /**
- * 通用 quota 卡片组件。
+ * Generic quota card component.
  */
 
 import { useTranslation } from 'react-i18next';
 import type { ReactElement, ReactNode } from 'react';
 import type { TFunction } from 'i18next';
-import type {
-  AuthFileItem,
-  QuotaCacheStatus,
-  QuotaStateBase,
-  ResolvedTheme,
-  ThemeColors
-} from '@/types';
-import { formatQuotaResetTime, TYPE_COLORS } from '@/utils/quota';
+import { Button } from '@/components/ui/Button';
+import { IconRefreshCw } from '@/components/ui/icons';
+import type { AuthFileItem, ResolvedTheme, ThemeColors } from '@/types';
+import { TYPE_COLORS } from '@/utils/quota';
 import styles from '@/pages/QuotaPage.module.scss';
 
-export type QuotaStatusState = QuotaStateBase;
+type QuotaStatus = 'idle' | 'loading' | 'success' | 'error';
+
+export interface QuotaStatusState {
+  status: QuotaStatus;
+  error?: string;
+  errorStatus?: number;
+}
 
 export interface QuotaProgressBarProps {
   percent: number | null;
@@ -26,10 +28,9 @@ export interface QuotaProgressBarProps {
 export function QuotaProgressBar({
   percent,
   highThreshold,
-  mediumThreshold
+  mediumThreshold,
 }: QuotaProgressBarProps) {
-  const clamp = (value: number, min: number, max: number) =>
-    Math.min(max, Math.max(min, value));
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
   const normalized = percent === null ? null : clamp(percent, 0, 100);
   const fillClass =
     normalized === null
@@ -39,7 +40,7 @@ export function QuotaProgressBar({
         : normalized >= mediumThreshold
           ? styles.quotaBarFillMedium
           : styles.quotaBarFillLow;
-  const widthPercent = Math.round(normalized ?? 0);
+  const widthPercent = Math.round((normalized ?? 0) * 100) / 100;
 
   return (
     <div className={styles.quotaBar}>
@@ -66,30 +67,9 @@ interface QuotaCardProps<TState extends QuotaStatusState> {
   defaultType: string;
   canRefresh?: boolean;
   onRefresh?: () => void;
+  resetQuotaAction?: ReactNode;
   renderQuotaItems: (quota: TState, t: TFunction, helpers: QuotaRenderHelpers) => ReactNode;
 }
-
-/**
- * 根据后端缓存状态选择对应的徽标样式，方便在卡片底部统一展示缓存健康度。
- */
-const resolveCacheStatusClassName = (status: QuotaCacheStatus): string => {
-  switch (status) {
-    case 'fresh':
-      return styles.quotaCacheBadgeFresh;
-    case 'refreshing':
-      return styles.quotaCacheBadgeRefreshing;
-    case 'rate_limited':
-      return styles.quotaCacheBadgeRateLimited;
-    case 'unauthorized':
-      return styles.quotaCacheBadgeUnauthorized;
-    case 'error':
-      return styles.quotaCacheBadgeError;
-    case 'pending':
-      return styles.quotaCacheBadgePending;
-    default:
-      return '';
-  }
-};
 
 export function QuotaCard<TState extends QuotaStatusState>({
   item,
@@ -101,7 +81,8 @@ export function QuotaCard<TState extends QuotaStatusState>({
   defaultType,
   canRefresh = false,
   onRefresh,
-  renderQuotaItems
+  resetQuotaAction,
+  renderQuotaItems,
 }: QuotaCardProps<TState>) {
   const { t } = useTranslation();
 
@@ -111,23 +92,21 @@ export function QuotaCard<TState extends QuotaStatusState>({
     resolvedTheme === 'dark' && typeColorSet.dark ? typeColorSet.dark : typeColorSet.light;
 
   const quotaStatus = quota?.status ?? 'idle';
+  const quotaLoading = quotaStatus === 'loading';
   const quotaErrorMessage = resolveQuotaErrorMessage(
     t,
     quota?.errorStatus,
     quota?.error || t('common.unknown_error')
   );
-  const idleMessageKey = onRefresh ? `${i18nPrefix}.idle` : (cardIdleMessageKey ?? `${i18nPrefix}.idle`);
-  const cacheStatus = quota?.cacheStatus;
-  const showPendingCacheAsIdle = quotaStatus === 'loading' && cacheStatus === 'pending';
-  const cacheStatusLabel = cacheStatus ? t(`quota_management.cache_status_${cacheStatus}`) : null;
-  const lastRefreshLabel = quota?.lastRefreshAt ? formatQuotaResetTime(quota.lastRefreshAt) : null;
-  const quotaRecoverLabel = quota?.quotaRecoverAt ? formatQuotaResetTime(quota.quotaRecoverAt) : null;
-  const showCacheMeta = Boolean(cacheStatusLabel || lastRefreshLabel || quotaRecoverLabel);
+  const idleMessageKey = onRefresh
+    ? `${i18nPrefix}.idle`
+    : (cardIdleMessageKey ?? `${i18nPrefix}.idle`);
 
   const getTypeLabel = (type: string): string => {
     const key = `auth_files.filter_${type}`;
     const translated = t(key);
     if (translated !== key) return translated;
+    if (type.toLowerCase() === 'iflow') return 'iFlow';
     return type.charAt(0).toUpperCase() + type.slice(1);
   };
 
@@ -139,7 +118,7 @@ export function QuotaCard<TState extends QuotaStatusState>({
           style={{
             backgroundColor: typeColor.bg,
             color: typeColor.text,
-            ...(typeColor.border ? { border: typeColor.border } : {})
+            ...(typeColor.border ? { border: typeColor.border } : {}),
           }}
         >
           {getTypeLabel(displayType)}
@@ -148,9 +127,9 @@ export function QuotaCard<TState extends QuotaStatusState>({
       </div>
 
       <div className={styles.quotaSection}>
-        {quotaStatus === 'loading' && !showPendingCacheAsIdle ? (
+        {quotaLoading ? (
           <div className={styles.quotaMessage}>{t(`${i18nPrefix}.loading`)}</div>
-        ) : quotaStatus === 'idle' || showPendingCacheAsIdle ? (
+        ) : quotaStatus === 'idle' ? (
           onRefresh ? (
             <button
               type="button"
@@ -166,7 +145,7 @@ export function QuotaCard<TState extends QuotaStatusState>({
         ) : quotaStatus === 'error' ? (
           <div className={styles.quotaError}>
             {t(`${i18nPrefix}.load_failed`, {
-              message: quotaErrorMessage
+              message: quotaErrorMessage,
             })}
           </div>
         ) : quota ? (
@@ -176,29 +155,23 @@ export function QuotaCard<TState extends QuotaStatusState>({
         )}
       </div>
 
-      {showCacheMeta && (
-        <div className={styles.quotaCacheMeta}>
-          {cacheStatusLabel && cacheStatus && (
-            <div className={styles.quotaCacheItem}>
-              <span className={styles.quotaCacheLabel}>{t('quota_management.cache_status_label')}</span>
-              <span
-                className={`${styles.quotaCacheBadge} ${resolveCacheStatusClassName(cacheStatus)}`}
-              >
-                {cacheStatusLabel}
-              </span>
-            </div>
-          )}
-          {lastRefreshLabel && (
-            <div className={styles.quotaCacheItem}>
-              <span className={styles.quotaCacheLabel}>{t('quota_management.last_refresh')}</span>
-              <span className={styles.quotaCacheValue}>{lastRefreshLabel}</span>
-            </div>
-          )}
-          {quotaRecoverLabel && (
-            <div className={styles.quotaCacheItem}>
-              <span className={styles.quotaCacheLabel}>{t('quota_management.quota_recover_at')}</span>
-              <span className={styles.quotaCacheValue}>{quotaRecoverLabel}</span>
-            </div>
+      {(resetQuotaAction || (onRefresh && quotaStatus !== 'idle')) && (
+        <div className={styles.quotaCardActions}>
+          {resetQuotaAction}
+          {onRefresh && quotaStatus !== 'idle' && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className={styles.quotaRefreshButton}
+              onClick={onRefresh}
+              disabled={!canRefresh || quotaLoading}
+              loading={quotaLoading}
+              title={t('auth_files.quota_refresh_hint')}
+            >
+              {!quotaLoading && <IconRefreshCw size={14} />}
+              {t('auth_files.quota_refresh_single')}
+            </Button>
           )}
         </div>
       )}

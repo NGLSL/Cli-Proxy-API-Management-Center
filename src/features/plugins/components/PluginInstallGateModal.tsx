@@ -1,14 +1,3 @@
-/**
- * PluginInstallGateModal（v7 引入）
- *
- * 三方插件安装的"三步确认"对话框：
- *  步骤 1：展示插件身份（名称、仓库链接、来源）
- *  步骤 2：高亮风险（执行任意代码、未经审计、需重启）
- *  步骤 3：要求用户手动键入确认 token（repo slug 或插件 id）才能继续
- *
- * 设计目的：避免一键误装三方插件，让用户明确知道自己在装什么来源的代码。
- * 默认（官方）源也会走这套流程，但来源文案会标注为 CLI Proxy API 官方。
- */
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
@@ -35,7 +24,6 @@ interface PluginInstallGateModalProps {
   onConfirm: () => void | Promise<void>;
 }
 
-// logo 加载失败时回退到通用插头图标
 function GateLogo({ src }: { src: string }) {
   const [failed, setFailed] = useState(false);
   return src && !failed ? (
@@ -59,8 +47,8 @@ export function PluginInstallGateModal({
   const [typed, setTyped] = useState('');
   const [wasOpen, setWasOpen] = useState(false);
 
-  // 每次新打开时重置到第 1 步并清空输入。这里采用 React 官方推荐的
-  // "渲染期间调整 state" 写法，避免额外的 useEffect。
+  // Reset the gauntlet to step 1 on each fresh open. Adjusting state during render
+  // (React's "you might not need an effect" guidance) avoids a setState-in-effect.
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
@@ -92,11 +80,10 @@ export function PluginInstallGateModal({
     try {
       await onConfirm();
     } catch {
-      // 错误由调用方通过 notification 上报；这里保持当前步骤不动
+      // The caller surfaces the error via a notification; stay on this step.
     }
   };
 
-  // 身份卡：每一步都重复展示，强化"你正在装的是这个东西"
   const identity = (
     <div className={styles.identity}>
       <div className={styles.logoBox} aria-hidden="true">

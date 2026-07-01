@@ -8,85 +8,28 @@ export type TypeColorSet = { light: ThemeColors; dark?: ThemeColors };
 export type ResolvedTheme = 'light' | 'dark';
 
 // API payload types
-export interface GeminiCliQuotaBucket {
-  modelId?: string;
-  model_id?: string;
-  tokenType?: string;
-  token_type?: string;
-  remainingFraction?: number | string;
-  remaining_fraction?: number | string;
-  remainingAmount?: number | string;
-  remaining_amount?: number | string;
+export interface AntigravityQuotaSummaryBucketPayload {
+  bucketId?: string;
+  bucket_id?: string;
+  displayName?: string;
+  display_name?: string;
+  window?: string;
   resetTime?: string;
   reset_time?: string;
-}
-
-export interface GeminiCliQuotaPayload {
-  buckets?: GeminiCliQuotaBucket[];
-}
-
-export interface GeminiCliCredits {
-  creditType?: string;
-  credit_type?: string;
-  creditAmount?: string | number;
-  credit_amount?: string | number;
-}
-
-export interface GeminiCliUserTier {
-  id?: string;
-  name?: string;
+  remainingFraction?: number | string;
+  remaining_fraction?: number | string;
   description?: string;
-  availableCredits?: GeminiCliCredits[];
-  available_credits?: GeminiCliCredits[];
 }
 
-export interface GeminiCliCodeAssistPayload {
-  currentTier?: GeminiCliUserTier | null;
-  current_tier?: GeminiCliUserTier | null;
-  paidTier?: GeminiCliUserTier | null;
-  paid_tier?: GeminiCliUserTier | null;
-}
-
-export interface AntigravityQuotaInfo {
+export interface AntigravityQuotaSummaryGroupPayload {
   displayName?: string;
-  quotaInfo?: {
-    remainingFraction?: number | string;
-    remaining_fraction?: number | string;
-    remaining?: number | string;
-    resetTime?: string;
-    reset_time?: string;
-  };
-  quota_info?: {
-    remainingFraction?: number | string;
-    remaining_fraction?: number | string;
-    remaining?: number | string;
-    resetTime?: string;
-    reset_time?: string;
-  };
+  display_name?: string;
+  description?: string;
+  buckets?: AntigravityQuotaSummaryBucketPayload[];
 }
 
-export type AntigravityModelsPayload = Record<string, AntigravityQuotaInfo>;
-
-export interface AntigravityQuotaGroupDefinition {
-  id: string;
-  label: string;
-  identifiers: string[];
-  labelFromModel?: boolean;
-}
-
-export interface GeminiCliQuotaGroupDefinition {
-  id: string;
-  label: string;
-  preferredModelId?: string;
-  modelIds: string[];
-}
-
-export interface GeminiCliParsedBucket {
-  modelId: string;
-  tokenType: string | null;
-  remainingFraction: number | null;
-  remainingAmount: number | null;
-  resetTime: string | undefined;
+export interface AntigravityQuotaSummaryPayload {
+  groups?: AntigravityQuotaSummaryGroupPayload[];
 }
 
 export interface CodexUsageWindow {
@@ -119,6 +62,18 @@ export interface CodexAdditionalRateLimit {
   rateLimit?: CodexRateLimitInfo | null;
 }
 
+export interface CodexRateLimitResetCredits {
+  available_count?: number | string;
+  availableCount?: number | string;
+}
+
+export interface CodexRateLimitResetCredit {
+  id: string;
+  status: string;
+  grantedAt: string;
+  expiresAt: string;
+}
+
 export interface CodexUsagePayload {
   plan_type?: string;
   planType?: string;
@@ -128,6 +83,8 @@ export interface CodexUsagePayload {
   codeReviewRateLimit?: CodexRateLimitInfo | null;
   additional_rate_limits?: CodexAdditionalRateLimit[] | null;
   additionalRateLimits?: CodexAdditionalRateLimit[] | null;
+  rate_limit_reset_credits?: CodexRateLimitResetCredits | null;
+  rateLimitResetCredits?: CodexRateLimitResetCredits | null;
 }
 
 // Claude API payload types
@@ -184,88 +141,45 @@ export interface ClaudeQuotaWindow {
   resetLabel: string;
 }
 
-export type QuotaCardStatus = 'idle' | 'loading' | 'success' | 'error';
-
-export type QuotaCacheStatus =
-  | 'fresh'
-  | 'refreshing'
-  | 'rate_limited'
-  | 'unauthorized'
-  | 'error'
-  | 'pending';
-
-export interface QuotaCacheEntry {
-  name: string;
-  provider: string;
-  auth_index: string;
-  disabled: boolean;
-  status: QuotaCacheStatus;
-  last_refresh_at?: string | null;
-  last_error?: string;
-  last_error_status?: number;
-  quota_recover_at?: string | null;
-  payload?: unknown;
-}
-
-export interface QuotaCacheSnapshot {
-  version: number;
-  updated_at: string;
-  entries: QuotaCacheEntry[];
-}
-
-export interface QuotaCacheRefreshRequest {
-  auth_indexes?: string[];
-  force: boolean;
-}
-
-export interface QuotaCacheRefreshResponse {
-  updated_at: string;
-  entries: QuotaCacheEntry[];
-}
-
-export interface QuotaStateBase {
-  status: QuotaCardStatus;
-  error?: string;
-  errorStatus?: number;
-  cacheStatus?: QuotaCacheStatus;
-  lastRefreshAt?: string;
-  quotaRecoverAt?: string;
-}
-
-export interface ClaudeQuotaState extends QuotaStateBase {
+export interface ClaudeQuotaState {
+  status: 'idle' | 'loading' | 'success' | 'error';
   windows: ClaudeQuotaWindow[];
   extraUsage?: ClaudeExtraUsage | null;
   planType?: string | null;
+  error?: string;
+  errorStatus?: number;
 }
 
 // Quota state types
 export interface AntigravityQuotaGroup {
   id: string;
   label: string;
-  models: string[];
-  remainingFraction: number;
-  resetTime?: string;
+  description?: string;
+  buckets: AntigravityQuotaBucket[];
 }
 
-export interface AntigravityQuotaState extends QuotaStateBase {
-  groups: AntigravityQuotaGroup[];
+export interface AntigravityQuotaSubscription {
+  plan: string | null;
+  tierName: string | null;
+  tierId: string | null;
 }
 
-export interface GeminiCliQuotaBucketState {
+export interface AntigravityQuotaBucket {
   id: string;
   label: string;
-  remainingFraction: number | null;
-  remainingAmount: number | null;
-  resetTime: string | undefined;
-  tokenType: string | null;
-  modelIds?: string[];
+  window?: string;
+  remainingFraction: number;
+  resetTime?: string;
+  description?: string;
 }
 
-export interface GeminiCliQuotaState extends QuotaStateBase {
-  buckets: GeminiCliQuotaBucketState[];
-  tierLabel?: string | null;
-  tierId?: string | null;
-  creditBalance?: number | null;
+export interface AntigravityQuotaState {
+  status: 'idle' | 'loading' | 'success' | 'error';
+  groups: AntigravityQuotaGroup[];
+  subscription?: AntigravityQuotaSubscription | null;
+  serverTimeOffsetMs?: number | null;
+  error?: string;
+  errorStatus?: number;
 }
 
 export interface CodexQuotaWindow {
@@ -277,9 +191,16 @@ export interface CodexQuotaWindow {
   resetLabel: string;
 }
 
-export interface CodexQuotaState extends QuotaStateBase {
+export interface CodexQuotaState {
+  status: 'idle' | 'loading' | 'success' | 'error';
   windows: CodexQuotaWindow[];
   planType?: string | null;
+  subscriptionActiveUntil?: string | number | null;
+  rateLimitResetCreditsAvailableCount?: number | null;
+  rateLimitResetCredits?: CodexRateLimitResetCredit[];
+  rateLimitResetCreditsError?: string;
+  error?: string;
+  errorStatus?: number;
 }
 
 // Kimi API payload types
@@ -336,6 +257,46 @@ export interface KimiQuotaRow {
   resetHint?: string;
 }
 
-export interface KimiQuotaState extends QuotaStateBase {
+export interface KimiQuotaState {
+  status: 'idle' | 'loading' | 'success' | 'error';
   rows: KimiQuotaRow[];
+  error?: string;
+  errorStatus?: number;
+}
+
+// xAI/Grok API payload types
+export interface XaiBillingCent {
+  val?: number | string;
+}
+
+export interface XaiBillingConfig {
+  monthlyLimit?: XaiBillingCent | number | string | null;
+  monthly_limit?: XaiBillingCent | number | string | null;
+  used?: XaiBillingCent | number | string | null;
+  onDemandCap?: XaiBillingCent | number | string | null;
+  on_demand_cap?: XaiBillingCent | number | string | null;
+  billingPeriodStart?: string;
+  billing_period_start?: string;
+  billingPeriodEnd?: string;
+  billing_period_end?: string;
+}
+
+export interface XaiBillingPayload {
+  config?: XaiBillingConfig | null;
+}
+
+export interface XaiBillingSummary {
+  monthlyLimitCents: number | null;
+  usedCents: number | null;
+  onDemandCapCents: number | null;
+  billingPeriodStart?: string;
+  billingPeriodEnd?: string;
+  usedPercent: number | null;
+}
+
+export interface XaiQuotaState {
+  status: 'idle' | 'loading' | 'success' | 'error';
+  billing: XaiBillingSummary | null;
+  error?: string;
+  errorStatus?: number;
 }

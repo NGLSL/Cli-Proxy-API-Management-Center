@@ -38,23 +38,19 @@ const SECTION_KEYS: RawConfigSection[] = [
   'proxy-url',
   'request-retry',
   'quota-exceeded',
-  'usage-statistics-enabled',
   'request-log',
   'logging-to-file',
   'logs-max-total-size-mb',
   'ws-auth',
   'force-model-prefix',
   'routing/strategy',
-  'routing/sticky-ttl',
-  'routing/source-preference',
   'api-keys',
-  'ampcode',
   'gemini-api-key',
   'codex-api-key',
   'claude-api-key',
   'vertex-api-key',
   'openai-compatibility',
-  'oauth-excluded-models'
+  'oauth-excluded-models',
 ];
 
 const extractSectionValue = (config: Config | null, section?: RawConfigSection) => {
@@ -68,8 +64,6 @@ const extractSectionValue = (config: Config | null, section?: RawConfigSection) 
       return config.requestRetry;
     case 'quota-exceeded':
       return config.quotaExceeded;
-    case 'usage-statistics-enabled':
-      return config.usageStatisticsEnabled;
     case 'request-log':
       return config.requestLog;
     case 'logging-to-file':
@@ -82,14 +76,8 @@ const extractSectionValue = (config: Config | null, section?: RawConfigSection) 
       return config.forceModelPrefix;
     case 'routing/strategy':
       return config.routingStrategy;
-    case 'routing/sticky-ttl':
-      return config.routingStickyTTL;
-    case 'routing/source-preference':
-      return config.routingSourcePreference;
     case 'api-keys':
       return config.apiKeys;
-    case 'ampcode':
-      return config.ampcode;
     case 'gemini-api-key':
       return config.geminiApiKeys;
     case 'codex-api-key':
@@ -168,17 +156,21 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       set({
         config: data,
         cache: newCache,
-        loading: false
+        loading: false,
       });
 
       return section ? extractSectionValue(data, section) : data;
     } catch (error: unknown) {
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Failed to fetch config';
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Failed to fetch config';
       if (requestId === configRequestToken) {
         set({
           error: message || 'Failed to fetch config',
-          loading: false
+          loading: false,
         });
       }
       throw error;
@@ -208,9 +200,6 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         case 'quota-exceeded':
           nextConfig.quotaExceeded = value as Config['quotaExceeded'];
           break;
-        case 'usage-statistics-enabled':
-          nextConfig.usageStatisticsEnabled = value as Config['usageStatisticsEnabled'];
-          break;
         case 'request-log':
           nextConfig.requestLog = value as Config['requestLog'];
           break;
@@ -229,17 +218,8 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         case 'routing/strategy':
           nextConfig.routingStrategy = value as Config['routingStrategy'];
           break;
-        case 'routing/sticky-ttl':
-          nextConfig.routingStickyTTL = value as Config['routingStickyTTL'];
-          break;
-        case 'routing/source-preference':
-          nextConfig.routingSourcePreference = value as Config['routingSourcePreference'];
-          break;
         case 'api-keys':
           nextConfig.apiKeys = value as Config['apiKeys'];
-          break;
-        case 'ampcode':
-          nextConfig.ampcode = value as Config['ampcode'];
           break;
         case 'gemini-api-key':
           nextConfig.geminiApiKeys = value as Config['geminiApiKeys'];
@@ -305,5 +285,5 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     if (!cached) return false;
 
     return Date.now() - cached.timestamp < CACHE_EXPIRY_MS;
-  }
+  },
 }));

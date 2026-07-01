@@ -7,7 +7,8 @@ import type { ReactNode } from 'react';
 import type { TFunction } from 'i18next';
 import type {
   AntigravityQuotaGroup,
-  AntigravityModelsPayload,
+  AntigravityQuotaSubscription,
+  AntigravityQuotaSummaryPayload,
   AntigravityQuotaState,
   AuthFileItem,
   ClaudeExtraUsage,
@@ -16,24 +17,24 @@ import type {
   ClaudeQuotaWindow,
   ClaudeUsagePayload,
   CodexRateLimitInfo,
+  CodexRateLimitResetCredit,
   CodexQuotaState,
   CodexUsageWindow,
   CodexQuotaWindow,
   CodexUsagePayload,
-  GeminiCliCodeAssistPayload,
-  GeminiCliCredits,
-  GeminiCliParsedBucket,
-  GeminiCliQuotaBucketState,
-  GeminiCliQuotaState,
-  GeminiCliUserTier,
   KimiQuotaRow,
   KimiQuotaState,
-  QuotaCacheEntry,
-  QuotaCacheSnapshot,
-  QuotaStateBase,
+  XaiBillingConfig,
+  XaiBillingSummary,
+  XaiQuotaState,
 } from '@/types';
-import { apiCallApi, authFilesApi, getApiCallErrorMessage } from '@/services/api';
-import { useQuotaStore } from '@/stores';
+import {
+  antigravitySubscriptionApi,
+  apiCallApi,
+  authFilesApi,
+  getApiCallErrorMessage,
+  type AntigravitySubscriptionSummary,
+} from '@/services/api';
 import {
   ANTIGRAVITY_QUOTA_URLS,
   ANTIGRAVITY_REQUEST_HEADERS,
@@ -41,71 +42,86 @@ import {
   CLAUDE_USAGE_URL,
   CLAUDE_REQUEST_HEADERS,
   CLAUDE_USAGE_WINDOW_KEYS,
+  CODEX_RATE_LIMIT_RESET_CREDITS_URL,
+  CODEX_RATE_LIMIT_RESET_CREDITS_CONSUME_URL,
   CODEX_USAGE_URL,
   CODEX_REQUEST_HEADERS,
-  GEMINI_CLI_QUOTA_URL,
-  GEMINI_CLI_CODE_ASSIST_URL,
-  GEMINI_CLI_REQUEST_HEADERS,
   KIMI_USAGE_URL,
   KIMI_REQUEST_HEADERS,
-  normalizeGeminiCliModelId,
+  XAI_BILLING_URL,
+  XAI_REQUEST_HEADERS,
   normalizeNumberValue,
   normalizePlanType,
-  normalizeQuotaFraction,
   normalizeStringValue,
+  normalizeCodexResetCreditsPayload,
   parseAntigravityPayload,
   parseClaudeUsagePayload,
   parseCodexUsagePayload,
-  parseGeminiCliQuotaPayload,
-  parseGeminiCliCodeAssistPayload,
   parseKimiUsagePayload,
+  parseXaiBillingPayload,
   resolveCodexChatgptAccountId,
   resolveCodexPlanType,
-  resolveGeminiCliProjectId,
+  resolveCodexSubscriptionActiveUntil,
   formatCodexResetLabel,
   formatQuotaResetTime,
   formatKimiResetHint,
   buildAntigravityQuotaGroups,
-  buildGeminiCliQuotaBuckets,
   buildKimiQuotaRows,
   createStatusError,
+  formatShanghaiDateTime,
   getStatusFromError,
   isAntigravityFile,
   isClaudeFile,
   isCodexFile,
   isDisabledAuthFile,
-  isGeminiCliFile,
   isKimiFile,
-  isRuntimeOnlyAuthFile,
+  isXaiFile,
 } from '@/utils/quota';
-import { normalizeAuthIndex } from '@/utils/usage';
+import { normalizeAuthIndex } from '@/utils/authIndex';
+import { formatDateTimeValue } from '@/utils/format';
 import type { QuotaRenderHelpers } from './QuotaCard';
 import styles from '@/pages/QuotaPage.module.scss';
 
 type QuotaUpdater<T> = T | ((prev: T) => T);
 
-type QuotaType = 'antigravity' | 'claude' | 'codex' | 'gemini-cli' | 'kimi';
+type QuotaType = 'antigravity' | 'claude' | 'codex' | 'kimi' | 'xai';
 
-const DEFAULT_ANTIGRAVITY_PROJECT_ID = 'bamboo-precept-lgxtn';
+type AntigravityQuotaData = {
+  groups: AntigravityQuotaGroup[];
+  subscription: AntigravityQuotaSubscription | null;
+  serverTimeOffsetMs: number | null;
+};
+
+type CodexResetCreditsData = {
+  availableCount: number | null;
+  credits: CodexRateLimitResetCredit[];
+  error: string;
+};
+
+type CodexQuotaData = {
+  planType: string | null;
+  subscriptionActiveUntil: string | number | null;
+  rateLimitResetCreditsAvailableCount: number | null;
+  rateLimitResetCredits: CodexRateLimitResetCredit[];
+  rateLimitResetCreditsError: string;
+  windows: CodexQuotaWindow[];
+};
+
 const QUOTA_PROGRESS_HIGH_THRESHOLD = 70;
 const QUOTA_PROGRESS_MEDIUM_THRESHOLD = 30;
-const geminiCliSupplementaryRequestIds = new Map<string, number>();
-const geminiCliSupplementaryCache = new Map<
-  string,
-  { requestId: number; tierLabel: string | null; tierId: string | null; creditBalance: number | null }
->();
+const CODEX_RESET_CREDITS_REQUEST_TIMEOUT_MS = 8000;
 
 export interface QuotaStore {
   antigravityQuota: Record<string, AntigravityQuotaState>;
   claudeQuota: Record<string, ClaudeQuotaState>;
   codexQuota: Record<string, CodexQuotaState>;
-  geminiCliQuota: Record<string, GeminiCliQuotaState>;
   kimiQuota: Record<string, KimiQuotaState>;
+  xaiQuota: Record<string, XaiQuotaState>;
   setAntigravityQuota: (updater: QuotaUpdater<Record<string, AntigravityQuotaState>>) => void;
   setClaudeQuota: (updater: QuotaUpdater<Record<string, ClaudeQuotaState>>) => void;
   setCodexQuota: (updater: QuotaUpdater<Record<string, CodexQuotaState>>) => void;
-  setGeminiCliQuota: (updater: QuotaUpdater<Record<string, GeminiCliQuotaState>>) => void;
   setKimiQuota: (updater: QuotaUpdater<Record<string, KimiQuotaState>>) => void;
+  setXaiQuota: (updater: QuotaUpdater<Record<string, XaiQuotaState>>) => void;
   clearQuotaCache: () => void;
 }
 
@@ -115,12 +131,13 @@ export interface QuotaConfig<TState, TData> {
   cardIdleMessageKey?: string;
   filterFn: (file: AuthFileItem) => boolean;
   fetchQuota: (file: AuthFileItem, t: TFunction) => Promise<TData>;
+  resetQuota?: (file: AuthFileItem, t: TFunction) => Promise<TData>;
+  canResetQuota?: (quota: TState) => boolean;
   storeSelector: (state: QuotaStore) => Record<string, TState>;
   storeSetter: keyof QuotaStore;
   buildLoadingState: () => TState;
   buildSuccessState: (data: TData) => TState;
   buildErrorState: (message: string, status?: number) => TState;
-  buildDataFromCachePayload: (payload: unknown, t: TFunction) => TData | null;
   cardClassName: string;
   controlsClassName: string;
   controlClassName: string;
@@ -128,345 +145,34 @@ export interface QuotaConfig<TState, TData> {
   renderQuotaItems: (quota: TState, t: TFunction, helpers: QuotaRenderHelpers) => ReactNode;
 }
 
-type QuotaCacheStores = Pick<
-  QuotaStore,
-  'antigravityQuota' | 'claudeQuota' | 'codexQuota' | 'geminiCliQuota' | 'kimiQuota'
->;
-
-const createEmptyQuotaCacheStores = (): QuotaCacheStores => ({
-  antigravityQuota: {},
-  claudeQuota: {},
-  codexQuota: {},
-  geminiCliQuota: {},
-  kimiQuota: {},
-});
-
-const parseQuotaCachePayloadObject = (payload: unknown): Record<string, unknown> | null => {
-  if (payload === null || payload === undefined) return null;
-  if (typeof payload === 'string') {
-    const trimmed = payload.trim();
-    if (!trimmed) return null;
-    try {
-      const parsed = JSON.parse(trimmed) as unknown;
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-        ? (parsed as Record<string, unknown>)
-        : null;
-    } catch {
-      return null;
-    }
-  }
-  return typeof payload === 'object' && !Array.isArray(payload)
-    ? (payload as Record<string, unknown>)
-    : null;
-};
-
-const buildQuotaStateBase = (
-  entry: QuotaCacheEntry
-): Pick<QuotaStateBase, 'cacheStatus' | 'lastRefreshAt' | 'quotaRecoverAt'> => ({
-  cacheStatus: entry.status,
-  lastRefreshAt: normalizeStringValue(entry.last_refresh_at) ?? undefined,
-  quotaRecoverAt: normalizeStringValue(entry.quota_recover_at) ?? undefined,
-});
-
-const mergeQuotaStateBase = <TState extends object>(
-  state: TState,
-  entry: QuotaCacheEntry
-): TState & Pick<QuotaStateBase, 'cacheStatus' | 'lastRefreshAt' | 'quotaRecoverAt'> => ({
-  ...state,
-  ...buildQuotaStateBase(entry),
-});
-
-const resolveQuotaCacheErrorMessage = (entry: QuotaCacheEntry, t: TFunction): string => {
-  const lastError = normalizeStringValue(entry.last_error);
-  if (lastError) return lastError;
-  if (entry.status === 'unauthorized') return t('common.quota_check_credential');
-  if (entry.status === 'rate_limited') return t('quota_management.cache_status_rate_limited');
-  if (entry.status === 'pending' || entry.status === 'refreshing') return t('common.loading');
-  return t('notification.refresh_failed');
-};
-
-const buildQuotaStateFromCacheEntry = <TState extends object, TData>(
-  config: QuotaConfig<TState, TData>,
-  entry: QuotaCacheEntry,
-  t: TFunction
-): TState => {
-  const payloadData = config.buildDataFromCachePayload(entry.payload, t);
-  if (payloadData !== null) {
-    return mergeQuotaStateBase(config.buildSuccessState(payloadData), entry);
-  }
-  if (entry.status === 'pending' || entry.status === 'refreshing') {
-    return mergeQuotaStateBase(config.buildLoadingState(), entry);
-  }
-  return mergeQuotaStateBase(
-    config.buildErrorState(resolveQuotaCacheErrorMessage(entry, t), entry.last_error_status),
-    entry
-  );
-};
-
-const buildQuotaCacheEntryIndex = (entries: QuotaCacheEntry[], provider: QuotaType) => {
-  const byName = new Map<string, QuotaCacheEntry>();
-  const byAuthIndex = new Map<string, QuotaCacheEntry>();
-
-  entries.forEach((entry) => {
-    if (entry.provider !== provider) return;
-    const name = normalizeStringValue(entry.name);
-    if (name) byName.set(name, entry);
-    const authIndex = normalizeAuthIndex(entry.auth_index);
-    if (authIndex) byAuthIndex.set(authIndex, entry);
-  });
-
-  return { byName, byAuthIndex };
-};
-
-export const buildQuotaStateMapFromEntries = <TState extends object, TData>(
-  config: QuotaConfig<TState, TData>,
-  files: AuthFileItem[],
-  entries: QuotaCacheEntry[],
-  t: TFunction
-): Record<string, TState> => {
-  const nextState: Record<string, TState> = {};
-  const entryIndex = buildQuotaCacheEntryIndex(entries, config.type);
-
-  files.forEach((file) => {
-    const authIndex = normalizeAuthIndex(file['auth_index'] ?? file.authIndex);
-    const entry = entryIndex.byName.get(file.name) ?? (authIndex ? entryIndex.byAuthIndex.get(authIndex) : undefined);
-    nextState[file.name] = entry
-      ? buildQuotaStateFromCacheEntry(config, entry, t)
-      : config.buildErrorState(t('notification.refresh_failed'));
-  });
-
-  return nextState;
-};
-
-export const buildQuotaStoresFromSnapshot = (
-  snapshot: QuotaCacheSnapshot,
-  t: TFunction
-): QuotaCacheStores => {
-  const stores = createEmptyQuotaCacheStores();
-  const entries = Array.isArray(snapshot.entries) ? snapshot.entries : [];
-
-  entries.forEach((entry) => {
-    if (!entry || typeof entry !== 'object') return;
-    switch (entry.provider) {
-      case 'antigravity':
-        stores.antigravityQuota[entry.name] = buildQuotaStateFromCacheEntry(ANTIGRAVITY_CONFIG, entry, t);
-        break;
-      case 'claude':
-        stores.claudeQuota[entry.name] = buildQuotaStateFromCacheEntry(CLAUDE_CONFIG, entry, t);
-        break;
-      case 'codex':
-        stores.codexQuota[entry.name] = buildQuotaStateFromCacheEntry(CODEX_CONFIG, entry, t);
-        break;
-      case 'gemini-cli':
-        stores.geminiCliQuota[entry.name] = buildQuotaStateFromCacheEntry(GEMINI_CLI_CONFIG, entry, t);
-        break;
-      case 'kimi':
-        stores.kimiQuota[entry.name] = buildQuotaStateFromCacheEntry(KIMI_CONFIG, entry, t);
-        break;
-      default:
-        break;
-    }
-  });
-
-  return stores;
-};
-
-const parseAntigravityGroupsFromCachePayload = (
-  payload: unknown
-): AntigravityQuotaGroup[] | null => {
-  const body = parseQuotaCachePayloadObject(payload);
-  if (!body) return null;
-  const rawGroups = body.groups;
-  if (!Array.isArray(rawGroups)) return [];
-
-  return rawGroups.reduce<AntigravityQuotaGroup[]>((result, item, index) => {
-    if (!item || typeof item !== 'object') return result;
-    const record = item as Record<string, unknown>;
-    const label = normalizeStringValue(record.label) ?? normalizeStringValue(record.displayName);
-    const models = Array.isArray(record.models)
-      ? record.models
-          .map((value) => normalizeStringValue(value))
-          .filter((value): value is string => Boolean(value))
-      : [];
-    const remainingFraction = normalizeQuotaFraction(record.remainingFraction ?? record.remaining_fraction);
-    if (!label || remainingFraction === null) return result;
-
-    result.push({
-      id: normalizeStringValue(record.id) ?? `group-${index}`,
-      label,
-      models,
-      remainingFraction,
-      resetTime: normalizeStringValue(record.resetTime ?? record.reset_time) ?? undefined,
-    });
-    return result;
-  }, []);
-};
-
-const normalizeClaudePlanTypeFromCache = (value: unknown): string | null => {
-  const normalized = normalizePlanType(value);
-  if (!normalized) return null;
-  if (normalized === 'max' || normalized === 'plan_max') return 'plan_max';
-  if (normalized === 'pro' || normalized === 'plan_pro') return 'plan_pro';
-  if (normalized === 'team' || normalized === 'plan_team') return 'plan_team';
-  if (normalized === 'free' || normalized === 'plan_free') return 'plan_free';
-  return normalized.startsWith('plan_') ? normalized : null;
-};
-
-const parseClaudeDataFromCachePayload = (
-  payload: unknown,
-  t: TFunction
-): { windows: ClaudeQuotaWindow[]; extraUsage?: ClaudeExtraUsage | null; planType?: string | null } | null => {
-  const body = parseQuotaCachePayloadObject(payload);
-  if (!body) return null;
-
-  const windowsPayload = Array.isArray(body.windows) ? body.windows : [];
-  const windows = windowsPayload.reduce<ClaudeQuotaWindow[]>((result, item, index) => {
-    if (!item || typeof item !== 'object') return result;
-    const record = item as Record<string, unknown>;
-    const id = normalizeStringValue(record.id) ?? `window-${index}`;
-    const labelKey = normalizeStringValue(record.labelKey);
-    const fallbackLabel = normalizeStringValue(record.label) ?? id;
-    result.push({
-      id,
-      label: labelKey ? t(labelKey) : fallbackLabel,
-      labelKey: labelKey ?? undefined,
-      usedPercent: normalizeNumberValue(record.usedPercent ?? record.used_percent),
-      resetLabel:
-        normalizeStringValue(record.resetLabel ?? record.reset_label) ??
-        formatQuotaResetTime(normalizeStringValue(record.resets_at) ?? undefined),
-    });
-    return result;
-  }, []);
-
-  const extraUsagePayload = body.extraUsage;
-  const extraUsage =
-    extraUsagePayload && typeof extraUsagePayload === 'object'
-      ? (extraUsagePayload as ClaudeExtraUsage)
-      : null;
-
-  return {
-    windows,
-    extraUsage,
-    planType: normalizeClaudePlanTypeFromCache(body.planType ?? body.plan_type),
-  };
-};
-
-const parseCodexDataFromCachePayload = (
-  payload: unknown,
-  t: TFunction
-): { planType: string | null; windows: CodexQuotaWindow[] } | null => {
-  const body = parseQuotaCachePayloadObject(payload);
-  if (!body) return null;
-
-  const windowsPayload = Array.isArray(body.windows) ? body.windows : [];
-  const windows = windowsPayload.reduce<CodexQuotaWindow[]>((result, item, index) => {
-    if (!item || typeof item !== 'object') return result;
-    const record = item as Record<string, unknown>;
-    const id = normalizeStringValue(record.id) ?? `window-${index}`;
-    const labelKey = normalizeStringValue(record.labelKey);
-    const labelParams =
-      record.labelParams && typeof record.labelParams === 'object' && !Array.isArray(record.labelParams)
-        ? (record.labelParams as Record<string, string | number>)
-        : undefined;
-    const fallbackLabel = normalizeStringValue(record.label) ?? id;
-    result.push({
-      id,
-      label: labelKey ? t(labelKey, labelParams ?? {}) : fallbackLabel,
-      labelKey: labelKey ?? undefined,
-      labelParams,
-      usedPercent: normalizeNumberValue(record.usedPercent ?? record.used_percent),
-      resetLabel:
-        normalizeStringValue(record.resetLabel ?? record.reset_label) ??
-        formatCodexResetLabel(record as CodexUsageWindow),
-    });
-    return result;
-  }, []);
-
-  return {
-    windows,
-    planType: normalizePlanType(body.planType ?? body.plan_type),
-  };
-};
-
-const parseGeminiCliDataFromCachePayload = (
-  payload: unknown
-): {
-  fileName: string;
-  supplementaryRequestId: number;
-  buckets: GeminiCliQuotaBucketState[];
-  tierLabel: string | null;
-  tierId: string | null;
-  creditBalance: number | null;
-} | null => {
-  const body = parseQuotaCachePayloadObject(payload);
-  if (!body) return null;
-
-  const rawBuckets = Array.isArray(body.buckets) ? body.buckets : [];
-  const buckets = rawBuckets.reduce<GeminiCliQuotaBucketState[]>((result, item, index) => {
-    if (!item || typeof item !== 'object') return result;
-    const record = item as Record<string, unknown>;
-    const label = normalizeStringValue(record.label);
-    if (!label) return result;
-
-    const rawModelIds = record.modelIds ?? record.model_ids;
-    const modelIds = Array.isArray(rawModelIds)
-      ? rawModelIds
-          .map((value: unknown) => normalizeStringValue(value))
-          .filter((value): value is string => Boolean(value))
-      : undefined;
-
-    result.push({
-      id: normalizeStringValue(record.id) ?? `bucket-${index}`,
-      label,
-      remainingFraction: normalizeQuotaFraction(record.remainingFraction ?? record.remaining_fraction),
-      remainingAmount: normalizeNumberValue(record.remainingAmount ?? record.remaining_amount),
-      resetTime: normalizeStringValue(record.resetTime ?? record.reset_time) ?? undefined,
-      tokenType: normalizeStringValue(record.tokenType ?? record.token_type),
-      ...(modelIds && modelIds.length > 0 ? { modelIds } : {}),
-    });
-    return result;
-  }, []);
-
-  return {
-    fileName: '',
-    supplementaryRequestId: 0,
-    buckets,
-    tierLabel: normalizeStringValue(body.tierLabel ?? body.tier_label),
-    tierId: normalizeStringValue(body.tierId ?? body.tier_id),
-    creditBalance: normalizeNumberValue(body.creditBalance ?? body.credit_balance),
-  };
-};
-
-const parseKimiRowsFromCachePayload = (payload: unknown): KimiQuotaRow[] | null => {
-  const body = parseQuotaCachePayloadObject(payload);
-  if (!body) return null;
-  const rawRows = Array.isArray(body.rows) ? body.rows : [];
-
-  return rawRows.reduce<KimiQuotaRow[]>((result, item, index) => {
-    if (!item || typeof item !== 'object') return result;
-    const record = item as Record<string, unknown>;
-    const labelParams =
-      record.labelParams && typeof record.labelParams === 'object' && !Array.isArray(record.labelParams)
-        ? (record.labelParams as Record<string, string | number>)
-        : undefined;
-    result.push({
-      id: normalizeStringValue(record.id) ?? `row-${index}`,
-      label: normalizeStringValue(record.label) ?? undefined,
-      labelKey: normalizeStringValue(record.labelKey) ?? undefined,
-      labelParams,
-      used: normalizeNumberValue(record.used) ?? 0,
-      limit: normalizeNumberValue(record.limit) ?? 0,
-      resetHint: normalizeStringValue(record.resetHint ?? record.reset_hint) ?? undefined,
-    });
-    return result;
-  }, []);
-};
-
 const resolveAntigravityProjectId = async (file: AuthFileItem): Promise<string> => {
+  const directProjectId = normalizeStringValue(file.project_id ?? file.projectId);
+  if (directProjectId) return directProjectId;
+
+  const metadata =
+    file.metadata && typeof file.metadata === 'object' && file.metadata !== null
+      ? (file.metadata as Record<string, unknown>)
+      : null;
+  const metadataProjectId = metadata
+    ? normalizeStringValue(metadata.project_id ?? metadata.projectId)
+    : null;
+  if (metadataProjectId) return metadataProjectId;
+
+  const attributes =
+    file.attributes && typeof file.attributes === 'object' && file.attributes !== null
+      ? (file.attributes as Record<string, unknown>)
+      : null;
+  const attributesProjectId = attributes
+    ? normalizeStringValue(
+        attributes.project_id ?? attributes.projectId ?? attributes.gemini_virtual_project
+      )
+    : null;
+  if (attributesProjectId) return attributesProjectId;
+
   try {
     const text = await authFilesApi.downloadText(file.name);
     const trimmed = text.trim();
-    if (!trimmed) return DEFAULT_ANTIGRAVITY_PROJECT_ID;
+    if (!trimmed) return '';
 
     const parsed = JSON.parse(trimmed) as Record<string, unknown>;
     const topLevel = normalizeStringValue(parsed.project_id ?? parsed.projectId);
@@ -488,16 +194,28 @@ const resolveAntigravityProjectId = async (file: AuthFileItem): Promise<string> 
     const webProjectId = web ? normalizeStringValue(web.project_id ?? web.projectId) : null;
     if (webProjectId) return webProjectId;
   } catch {
-    return DEFAULT_ANTIGRAVITY_PROJECT_ID;
+    return '';
   }
 
-  return DEFAULT_ANTIGRAVITY_PROJECT_ID;
+  return '';
+};
+
+const resolveResponseServerTimeOffsetMs = (
+  header: Record<string, string[]> | undefined
+): number | null => {
+  if (!header) return null;
+  const dateEntry = Object.entries(header).find(([key]) => key.toLowerCase() === 'date');
+  const rawDate = dateEntry?.[1]?.[0];
+  if (!rawDate) return null;
+  const serverTime = new Date(rawDate).getTime();
+  if (Number.isNaN(serverTime)) return null;
+  return serverTime - Date.now();
 };
 
 const fetchAntigravityQuota = async (
   file: AuthFileItem,
   t: TFunction
-): Promise<AntigravityQuotaGroup[]> => {
+): Promise<AntigravityQuotaData> => {
   const rawAuthIndex = file['auth_index'] ?? file.authIndex;
   const authIndex = normalizeAuthIndex(rawAuthIndex);
   if (!authIndex) {
@@ -505,7 +223,14 @@ const fetchAntigravityQuota = async (
   }
 
   const projectId = await resolveAntigravityProjectId(file);
+  if (!projectId) {
+    throw new Error(t('antigravity_quota.missing_project_id'));
+  }
   const requestBody = JSON.stringify({ project: projectId });
+  const subscriptionPromise = antigravitySubscriptionApi
+    .get(authIndex)
+    .then(toAntigravityQuotaSubscription)
+    .catch(() => null);
 
   let lastError = '';
   let lastStatus: number | undefined;
@@ -532,20 +257,25 @@ const fetchAntigravityQuota = async (
       }
 
       hadSuccess = true;
-      const payload = parseAntigravityPayload(result.body ?? result.bodyText);
-      const models = payload?.models;
-      if (!models || typeof models !== 'object' || Array.isArray(models)) {
+      const payload = parseAntigravityPayload(
+        result.body ?? result.bodyText
+      ) as AntigravityQuotaSummaryPayload | null;
+      if (!payload || !Array.isArray(payload.groups)) {
         lastError = t('antigravity_quota.empty_models');
         continue;
       }
 
-      const groups = buildAntigravityQuotaGroups(models as AntigravityModelsPayload);
+      const groups = buildAntigravityQuotaGroups(payload);
       if (groups.length === 0) {
         lastError = t('antigravity_quota.empty_models');
         continue;
       }
 
-      return groups;
+      return {
+        groups,
+        subscription: await subscriptionPromise,
+        serverTimeOffsetMs: resolveResponseServerTimeOffsetMs(result.header),
+      };
     } catch (err: unknown) {
       lastError = err instanceof Error ? err.message : t('common.unknown_error');
       const status = getStatusFromError(err);
@@ -559,117 +289,58 @@ const fetchAntigravityQuota = async (
   }
 
   if (hadSuccess) {
-    return [];
+    return { groups: [], subscription: await subscriptionPromise, serverTimeOffsetMs: null };
   }
 
   throw createStatusError(lastError || t('common.unknown_error'), priorityStatus ?? lastStatus);
 };
 
+const toAntigravityQuotaSubscription = (
+  summary: AntigravitySubscriptionSummary | null
+): AntigravityQuotaSubscription | null => {
+  if (!summary) return null;
+  return {
+    plan: summary.plan,
+    tierName: summary.tierName,
+    tierId: summary.tierId,
+  };
+};
+
 const buildCodexQuotaWindows = (payload: CodexUsagePayload, t: TFunction): CodexQuotaWindow[] => {
-  const HOUR_SECONDS = 3600;
-  const DAY_SECONDS = 86400;
-  const FIVE_HOUR_SECONDS = 5 * HOUR_SECONDS;
-  const WEEK_SECONDS = 7 * DAY_SECONDS;
-  const MONTH_MIN_SECONDS = 28 * DAY_SECONDS;
-  const MONTH_MAX_SECONDS = 31 * DAY_SECONDS;
-
-  type CodexWindowScope = 'default' | 'code-review' | 'additional';
-  type CodexWindowSlot = 'primary' | 'secondary';
-  type CodexWindowKind = 'primary' | 'secondary' | 'monthly' | 'days' | 'hours' | 'seconds';
-
+  const FIVE_HOUR_SECONDS = 18000;
+  const WEEK_SECONDS = 604800;
+  const MIN_MONTH_SECONDS = 28 * 24 * 60 * 60;
+  const MAX_MONTH_SECONDS = 31 * 24 * 60 * 60;
   const WINDOW_META = {
-    codeFiveHour: { id: 'five-hour' },
-    codeSecondary: { id: 'weekly' },
-    codeReviewFiveHour: { id: 'code-review-five-hour' },
-    codeReviewSecondary: { id: 'code-review-weekly' },
+    codeFiveHour: { id: 'five-hour', labelKey: 'codex_quota.primary_window' },
+    codeWeekly: { id: 'weekly', labelKey: 'codex_quota.secondary_window' },
+    codeMonthly: { id: 'monthly', labelKey: 'codex_quota.team_secondary_window' },
+    codeReviewFiveHour: {
+      id: 'code-review-five-hour',
+      labelKey: 'codex_quota.code_review_primary_window',
+    },
+    codeReviewWeekly: {
+      id: 'code-review-weekly',
+      labelKey: 'codex_quota.code_review_secondary_window',
+    },
+    codeReviewMonthly: {
+      id: 'code-review-monthly',
+      labelKey: 'codex_quota.code_review_team_secondary_window',
+    },
   } as const;
 
   const rateLimit = payload.rate_limit ?? payload.rateLimit ?? undefined;
-  const codeReviewLimit = payload.code_review_rate_limit ?? payload.codeReviewRateLimit ?? undefined;
+  const codeReviewLimit =
+    payload.code_review_rate_limit ?? payload.codeReviewRateLimit ?? undefined;
   const additionalRateLimits = payload.additional_rate_limits ?? payload.additionalRateLimits ?? [];
   const windows: CodexQuotaWindow[] = [];
 
-  const getWindowSeconds = (window?: CodexUsageWindow | null): number | null => {
-    if (!window) return null;
-    return normalizeNumberValue(window.limit_window_seconds ?? window.limitWindowSeconds);
-  };
-
-  const isMonthlyWindow = (seconds: number): boolean =>
-    seconds >= MONTH_MIN_SECONDS && seconds <= MONTH_MAX_SECONDS;
-
-  const resolveLabelKey = (scope: CodexWindowScope, kind: CodexWindowKind): string => {
-    const keyMap: Record<CodexWindowScope, Record<CodexWindowKind, string>> = {
-      default: {
-        primary: 'codex_quota.primary_window',
-        secondary: 'codex_quota.secondary_window',
-        monthly: 'codex_quota.monthly_window',
-        days: 'codex_quota.custom_days_window',
-        hours: 'codex_quota.custom_hours_window',
-        seconds: 'codex_quota.custom_seconds_window',
-      },
-      'code-review': {
-        primary: 'codex_quota.code_review_primary_window',
-        secondary: 'codex_quota.code_review_secondary_window',
-        monthly: 'codex_quota.code_review_monthly_window',
-        days: 'codex_quota.code_review_custom_days_window',
-        hours: 'codex_quota.code_review_custom_hours_window',
-        seconds: 'codex_quota.code_review_custom_seconds_window',
-      },
-      additional: {
-        primary: 'codex_quota.additional_primary_window',
-        secondary: 'codex_quota.additional_secondary_window',
-        monthly: 'codex_quota.additional_monthly_window',
-        days: 'codex_quota.additional_custom_days_window',
-        hours: 'codex_quota.additional_custom_hours_window',
-        seconds: 'codex_quota.additional_custom_seconds_window',
-      },
-    };
-    return keyMap[scope][kind];
-  };
-
-  const resolveWindowLabel = (
-    scope: CodexWindowScope,
-    slot: CodexWindowSlot,
-    window: CodexUsageWindow,
-    baseParams?: Record<string, string | number>
-  ) => {
-    const seconds = getWindowSeconds(window);
-    const labelParams: Record<string, string | number> = { ...(baseParams ?? {}) };
-    let kind: CodexWindowKind = slot;
-
-    if (seconds !== null) {
-      if (seconds === FIVE_HOUR_SECONDS) {
-        kind = 'primary';
-      } else if (seconds === WEEK_SECONDS) {
-        kind = 'secondary';
-      } else if (isMonthlyWindow(seconds)) {
-        kind = 'monthly';
-      } else if (seconds >= DAY_SECONDS && seconds % DAY_SECONDS === 0) {
-        kind = 'days';
-        labelParams.count = seconds / DAY_SECONDS;
-      } else if (seconds >= HOUR_SECONDS && seconds % HOUR_SECONDS === 0) {
-        kind = 'hours';
-        labelParams.count = seconds / HOUR_SECONDS;
-      } else {
-        kind = 'seconds';
-        labelParams.count = seconds;
-      }
-    }
-
-    const labelKey = resolveLabelKey(scope, kind);
-    return {
-      label: t(labelKey, labelParams),
-      labelKey,
-      labelParams: Object.keys(labelParams).length > 0 ? labelParams : undefined,
-    };
-  };
-
   const addWindow = (
     id: string,
-    scope: CodexWindowScope,
-    slot: CodexWindowSlot,
+    label: string,
+    labelKey: string | undefined,
+    labelParams: Record<string, string | number> | undefined,
     window?: CodexUsageWindow | null,
-    labelParams?: Record<string, string | number>,
     limitReached?: boolean,
     allowed?: boolean
   ) => {
@@ -678,82 +349,95 @@ const buildCodexQuotaWindows = (payload: CodexUsagePayload, t: TFunction): Codex
     const usedPercentRaw = normalizeNumberValue(window.used_percent ?? window.usedPercent);
     const isLimitReached = Boolean(limitReached) || allowed === false;
     const usedPercent = usedPercentRaw ?? (isLimitReached && resetLabel !== '-' ? 100 : null);
-    const label = resolveWindowLabel(scope, slot, window, labelParams);
     windows.push({
       id,
-      ...label,
+      label,
+      labelKey,
+      labelParams,
       usedPercent,
       resetLabel,
     });
   };
 
+  const getWindowSeconds = (window?: CodexUsageWindow | null): number | null => {
+    if (!window) return null;
+    return normalizeNumberValue(window.limit_window_seconds ?? window.limitWindowSeconds);
+  };
+
+  const isMonthlyWindow = (window?: CodexUsageWindow | null): boolean => {
+    const seconds = getWindowSeconds(window);
+    return seconds !== null && seconds >= MIN_MONTH_SECONDS && seconds <= MAX_MONTH_SECONDS;
+  };
+
+  const selectSecondaryWindowMeta = <
+    TWeekly extends { id: string; labelKey: string },
+    TMonthly extends { id: string; labelKey: string },
+  >(
+    window: CodexUsageWindow | null | undefined,
+    weeklyMeta: TWeekly,
+    monthlyMeta: TMonthly
+  ): TWeekly | TMonthly => (isMonthlyWindow(window) ? monthlyMeta : weeklyMeta);
+
   const rawLimitReached = rateLimit?.limit_reached ?? rateLimit?.limitReached;
   const rawAllowed = rateLimit?.allowed;
 
   const pickClassifiedWindows = (
-    limitInfo?: CodexRateLimitInfo | null
-  ): { fiveHourWindow: CodexUsageWindow | null; secondaryWindow: CodexUsageWindow | null } => {
+    limitInfo?: CodexRateLimitInfo | null,
+    options?: { allowOrderFallback?: boolean }
+  ): { fiveHourWindow: CodexUsageWindow | null; weeklyWindow: CodexUsageWindow | null } => {
+    const allowOrderFallback = options?.allowOrderFallback ?? true;
     const primaryWindow = limitInfo?.primary_window ?? limitInfo?.primaryWindow ?? null;
     const secondaryWindow = limitInfo?.secondary_window ?? limitInfo?.secondaryWindow ?? null;
-    const primarySeconds = getWindowSeconds(primaryWindow);
-    const secondarySeconds = getWindowSeconds(secondaryWindow);
+    const rawWindows = [primaryWindow, secondaryWindow];
 
-    const fiveHourWindow =
-      primarySeconds === FIVE_HOUR_SECONDS
-        ? primaryWindow
-        : secondarySeconds === FIVE_HOUR_SECONDS
-          ? secondaryWindow
-          : null;
+    let fiveHourWindow: CodexUsageWindow | null = null;
+    let weeklyWindow: CodexUsageWindow | null = null;
 
-    if (fiveHourWindow) {
-      const secondaryClassifiedWindow =
-        primaryWindow && primaryWindow !== fiveHourWindow
-          ? primaryWindow
-          : secondaryWindow && secondaryWindow !== fiveHourWindow
-            ? secondaryWindow
-            : null;
-      return { fiveHourWindow, secondaryWindow: secondaryClassifiedWindow };
+    for (const window of rawWindows) {
+      if (!window) continue;
+      const seconds = getWindowSeconds(window);
+      if (seconds === FIVE_HOUR_SECONDS && !fiveHourWindow) {
+        fiveHourWindow = window;
+      } else if ((seconds === WEEK_SECONDS || isMonthlyWindow(window)) && !weeklyWindow) {
+        weeklyWindow = window;
+      }
     }
 
-    if (primaryWindow && secondaryWindow) {
-      return { fiveHourWindow: primaryWindow, secondaryWindow };
+    // For legacy payloads without window duration, fallback to primary/secondary ordering.
+    if (allowOrderFallback) {
+      if (!fiveHourWindow) {
+        fiveHourWindow = primaryWindow && primaryWindow !== weeklyWindow ? primaryWindow : null;
+      }
+      if (!weeklyWindow) {
+        weeklyWindow =
+          secondaryWindow && secondaryWindow !== fiveHourWindow ? secondaryWindow : null;
+      }
     }
 
-    if (primaryWindow) {
-      const hasDuration = primarySeconds !== null;
-      return {
-        fiveHourWindow: hasDuration ? null : primaryWindow,
-        secondaryWindow: hasDuration ? primaryWindow : null,
-      };
-    }
-
-    if (secondaryWindow) {
-      const hasDuration = secondarySeconds !== null;
-      return {
-        fiveHourWindow: hasDuration ? null : secondaryWindow,
-        secondaryWindow: hasDuration ? secondaryWindow : null,
-      };
-    }
-
-    return { fiveHourWindow: null, secondaryWindow: null };
+    return { fiveHourWindow, weeklyWindow };
   };
 
   const rateWindows = pickClassifiedWindows(rateLimit);
   addWindow(
     WINDOW_META.codeFiveHour.id,
-    'default',
-    'primary',
-    rateWindows.fiveHourWindow,
+    t(WINDOW_META.codeFiveHour.labelKey),
+    WINDOW_META.codeFiveHour.labelKey,
     undefined,
+    rateWindows.fiveHourWindow,
     rawLimitReached,
     rawAllowed
   );
+  const codeSecondaryWindowMeta = selectSecondaryWindowMeta(
+    rateWindows.weeklyWindow,
+    WINDOW_META.codeWeekly,
+    WINDOW_META.codeMonthly
+  );
   addWindow(
-    WINDOW_META.codeSecondary.id,
-    'default',
-    'secondary',
-    rateWindows.secondaryWindow,
+    codeSecondaryWindowMeta.id,
+    t(codeSecondaryWindowMeta.labelKey),
+    codeSecondaryWindowMeta.labelKey,
     undefined,
+    rateWindows.weeklyWindow,
     rawLimitReached,
     rawAllowed
   );
@@ -763,19 +447,24 @@ const buildCodexQuotaWindows = (payload: CodexUsagePayload, t: TFunction): Codex
   const codeReviewAllowed = codeReviewLimit?.allowed;
   addWindow(
     WINDOW_META.codeReviewFiveHour.id,
-    'code-review',
-    'primary',
-    codeReviewWindows.fiveHourWindow,
+    t(WINDOW_META.codeReviewFiveHour.labelKey),
+    WINDOW_META.codeReviewFiveHour.labelKey,
     undefined,
+    codeReviewWindows.fiveHourWindow,
     codeReviewLimitReached,
     codeReviewAllowed
   );
+  const codeReviewSecondaryWindowMeta = selectSecondaryWindowMeta(
+    codeReviewWindows.weeklyWindow,
+    WINDOW_META.codeReviewWeekly,
+    WINDOW_META.codeReviewMonthly
+  );
   addWindow(
-    WINDOW_META.codeReviewSecondary.id,
-    'code-review',
-    'secondary',
-    codeReviewWindows.secondaryWindow,
+    codeReviewSecondaryWindowMeta.id,
+    t(codeReviewSecondaryWindowMeta.labelKey),
+    codeReviewSecondaryWindowMeta.labelKey,
     undefined,
+    codeReviewWindows.weeklyWindow,
     codeReviewLimitReached,
     codeReviewAllowed
   );
@@ -798,26 +487,32 @@ const buildCodexQuotaWindows = (payload: CodexUsagePayload, t: TFunction): Codex
         `additional-${index + 1}`;
 
       const idPrefix = normalizeWindowId(limitName) || `additional-${index + 1}`;
-      const additionalWindows = pickClassifiedWindows(rateInfo);
+      const additionalPrimaryWindow = rateInfo.primary_window ?? rateInfo.primaryWindow ?? null;
+      const additionalSecondaryWindow =
+        rateInfo.secondary_window ?? rateInfo.secondaryWindow ?? null;
       const additionalLimitReached = rateInfo.limit_reached ?? rateInfo.limitReached;
       const additionalAllowed = rateInfo.allowed;
-      const additionalLabelParams = { name: limitName };
 
       addWindow(
         `${idPrefix}-five-hour-${index}`,
-        'additional',
-        'primary',
-        additionalWindows.fiveHourWindow,
-        additionalLabelParams,
+        t('codex_quota.additional_primary_window', { name: limitName }),
+        'codex_quota.additional_primary_window',
+        { name: limitName },
+        additionalPrimaryWindow,
         additionalLimitReached,
         additionalAllowed
       );
+      const additionalSecondaryMeta = selectSecondaryWindowMeta(
+        additionalSecondaryWindow,
+        { id: 'weekly', labelKey: 'codex_quota.additional_secondary_window' },
+        { id: 'monthly', labelKey: 'codex_quota.additional_team_secondary_window' }
+      );
       addWindow(
-        `${idPrefix}-weekly-${index}`,
-        'additional',
-        'secondary',
-        additionalWindows.secondaryWindow,
-        additionalLabelParams,
+        `${idPrefix}-${additionalSecondaryMeta.id}-${index}`,
+        t(additionalSecondaryMeta.labelKey, { name: limitName }),
+        additionalSecondaryMeta.labelKey,
+        { name: limitName },
+        additionalSecondaryWindow,
         additionalLimitReached,
         additionalAllowed
       );
@@ -827,10 +522,70 @@ const buildCodexQuotaWindows = (payload: CodexUsagePayload, t: TFunction): Codex
   return windows;
 };
 
-const fetchCodexQuota = async (
-  file: AuthFileItem,
+const buildCodexRequestHeader = (file: AuthFileItem): Record<string, string> => {
+  const accountId = resolveCodexChatgptAccountId(file);
+  const requestHeader: Record<string, string> = {
+    ...CODEX_REQUEST_HEADERS,
+  };
+  if (accountId) {
+    requestHeader['Chatgpt-Account-Id'] = accountId;
+  }
+  return requestHeader;
+};
+
+const fetchCodexResetCredits = async (
+  authIndex: string,
+  requestHeader: Record<string, string>,
   t: TFunction
-): Promise<{ planType: string | null; windows: CodexQuotaWindow[] }> => {
+): Promise<CodexResetCreditsData> => {
+  try {
+    const result = await apiCallApi.request(
+      {
+        authIndex,
+        method: 'GET',
+        url: CODEX_RATE_LIMIT_RESET_CREDITS_URL,
+        header: {
+          ...requestHeader,
+          Accept: 'application/json',
+          'OpenAI-Beta': 'codex-1',
+          Originator: 'Codex Desktop',
+        },
+      },
+      { timeout: CODEX_RESET_CREDITS_REQUEST_TIMEOUT_MS }
+    );
+
+    if (result.statusCode < 200 || result.statusCode >= 300) {
+      return {
+        availableCount: null,
+        credits: [],
+        error: getApiCallErrorMessage(result),
+      };
+    }
+
+    const summary = normalizeCodexResetCreditsPayload(result.body ?? result.bodyText);
+    if (summary.invalidPayload) {
+      return {
+        availableCount: null,
+        credits: [],
+        error: t('codex_quota.reset_credits_invalid_payload'),
+      };
+    }
+
+    return {
+      availableCount: summary.availableCount,
+      credits: summary.credits,
+      error: '',
+    };
+  } catch (err: unknown) {
+    return {
+      availableCount: null,
+      credits: [],
+      error: err instanceof Error ? err.message : t('common.unknown_error'),
+    };
+  }
+};
+
+const fetchCodexQuota = async (file: AuthFileItem, t: TFunction): Promise<CodexQuotaData> => {
   const rawAuthIndex = file['auth_index'] ?? file.authIndex;
   const authIndex = normalizeAuthIndex(rawAuthIndex);
   if (!authIndex) {
@@ -838,15 +593,8 @@ const fetchCodexQuota = async (
   }
 
   const planTypeFromFile = resolveCodexPlanType(file);
-  const accountId = resolveCodexChatgptAccountId(file);
-  if (!accountId) {
-    throw new Error(t('codex_quota.missing_account_id'));
-  }
-
-  const requestHeader: Record<string, string> = {
-    ...CODEX_REQUEST_HEADERS,
-    'Chatgpt-Account-Id': accountId,
-  };
+  const subscriptionActiveUntil = resolveCodexSubscriptionActiveUntil(file);
+  const requestHeader = buildCodexRequestHeader(file);
 
   const result = await apiCallApi.request({
     authIndex,
@@ -865,259 +613,168 @@ const fetchCodexQuota = async (
   }
 
   const planTypeFromUsage = normalizePlanType(payload.plan_type ?? payload.planType);
+  const resetCredits = payload.rate_limit_reset_credits ?? payload.rateLimitResetCredits ?? null;
+  const usageResetCreditsAvailableCount = normalizeNumberValue(
+    resetCredits?.available_count ?? resetCredits?.availableCount
+  );
+  const resetCreditsData = await fetchCodexResetCredits(authIndex, requestHeader, t);
+  const resetCreditsCountFromDetails =
+    resetCreditsData.credits.length > 0 ? resetCreditsData.credits.length : null;
+  const rateLimitResetCreditsAvailableCount =
+    resetCreditsData.availableCount ??
+    resetCreditsCountFromDetails ??
+    usageResetCreditsAvailableCount;
+  const planType = planTypeFromUsage ?? planTypeFromFile;
   const windows = buildCodexQuotaWindows(payload, t);
-  return { planType: planTypeFromUsage ?? planTypeFromFile, windows };
-};
-
-const GEMINI_CLI_G1_CREDIT_TYPE = 'GOOGLE_ONE_AI';
-
-const GEMINI_CLI_TIER_LABELS: Record<string, string> = {
-  'free-tier': 'tier_free',
-  'legacy-tier': 'tier_legacy',
-  'standard-tier': 'tier_standard',
-  'g1-pro-tier': 'tier_pro',
-  'g1-ultra-tier': 'tier_ultra',
-};
-
-const resolveGeminiCliTierLabel = (
-  payload: GeminiCliCodeAssistPayload | null,
-  t: TFunction
-): string | null => {
-  if (!payload) return null;
-  const currentTier: GeminiCliUserTier | null | undefined =
-    payload.currentTier ?? payload.current_tier;
-  const paidTier: GeminiCliUserTier | null | undefined =
-    payload.paidTier ?? payload.paid_tier;
-  const rawId = normalizeStringValue(paidTier?.id) ?? normalizeStringValue(currentTier?.id);
-  if (!rawId) return null;
-  const tierId = rawId.toLowerCase();
-  const labelKey = GEMINI_CLI_TIER_LABELS[tierId];
-  return labelKey ? t(`gemini_cli_quota.${labelKey}`) : rawId;
-};
-
-const resolveGeminiCliTierId = (
-  payload: GeminiCliCodeAssistPayload | null
-): string | null => {
-  if (!payload) return null;
-  const currentTier: GeminiCliUserTier | null | undefined =
-    payload.currentTier ?? payload.current_tier;
-  const paidTier: GeminiCliUserTier | null | undefined =
-    payload.paidTier ?? payload.paid_tier;
-  const rawId = normalizeStringValue(paidTier?.id) ?? normalizeStringValue(currentTier?.id);
-  return rawId ? rawId.toLowerCase() : null;
-};
-
-const resolveGeminiCliCreditBalance = (
-  payload: GeminiCliCodeAssistPayload | null
-): number | null => {
-  if (!payload) return null;
-  const paidTier: GeminiCliUserTier | null | undefined =
-    payload.paidTier ?? payload.paid_tier;
-  const currentTier: GeminiCliUserTier | null | undefined =
-    payload.currentTier ?? payload.current_tier;
-  const tier = paidTier ?? currentTier;
-  if (!tier) return null;
-  const credits: GeminiCliCredits[] =
-    tier.availableCredits ?? tier.available_credits ?? [];
-  let total = 0;
-  let found = false;
-  for (const credit of credits) {
-    const creditType = normalizeStringValue(credit.creditType ?? credit.credit_type);
-    if (creditType !== GEMINI_CLI_G1_CREDIT_TYPE) continue;
-    const amount = normalizeNumberValue(credit.creditAmount ?? credit.credit_amount);
-    if (amount !== null) {
-      total += amount;
-      found = true;
-    }
-  }
-  return found ? total : null;
-};
-
-const fetchGeminiCliCodeAssist = async (
-  authIndex: string,
-  projectId: string,
-  t: TFunction
-): Promise<{ tierLabel: string | null; tierId: string | null; creditBalance: number | null }> => {
-  try {
-    const result = await apiCallApi.request({
-      authIndex,
-      method: 'POST',
-      url: GEMINI_CLI_CODE_ASSIST_URL,
-      header: { ...GEMINI_CLI_REQUEST_HEADERS },
-      data: JSON.stringify({
-        cloudaicompanionProject: projectId,
-        metadata: {
-          ideType: 'IDE_UNSPECIFIED',
-          platform: 'PLATFORM_UNSPECIFIED',
-          pluginType: 'GEMINI',
-          duetProject: projectId,
-        },
-      }),
-    });
-
-    if (result.statusCode < 200 || result.statusCode >= 300) {
-      return { tierLabel: null, tierId: null, creditBalance: null };
-    }
-
-    const payload = parseGeminiCliCodeAssistPayload(result.body ?? result.bodyText);
-    return {
-      tierLabel: resolveGeminiCliTierLabel(payload, t),
-      tierId: resolveGeminiCliTierId(payload),
-      creditBalance: resolveGeminiCliCreditBalance(payload),
-    };
-  } catch {
-    return { tierLabel: null, tierId: null, creditBalance: null };
-  }
-};
-
-const readGeminiCliSupplementarySnapshot = (
-  fileName: string,
-  requestId: number
-): { tierLabel: string | null; tierId: string | null; creditBalance: number | null } => {
-  const cached = geminiCliSupplementaryCache.get(fileName);
-  if (!cached || cached.requestId !== requestId) {
-    return { tierLabel: null, tierId: null, creditBalance: null };
-  }
-
   return {
-    tierLabel: cached.tierLabel,
-    tierId: cached.tierId,
-    creditBalance: cached.creditBalance,
+    planType,
+    subscriptionActiveUntil,
+    rateLimitResetCreditsAvailableCount,
+    rateLimitResetCredits: resetCreditsData.credits,
+    rateLimitResetCreditsError: resetCreditsData.error,
+    windows,
   };
 };
 
-const scheduleGeminiCliSupplementaryRefresh = (
-  fileName: string,
-  authIndex: string,
-  projectId: string,
-  t: TFunction
-): number => {
-  const requestId = (geminiCliSupplementaryRequestIds.get(fileName) ?? 0) + 1;
-  geminiCliSupplementaryRequestIds.set(fileName, requestId);
-  geminiCliSupplementaryCache.delete(fileName);
+const createCodexRedeemRequestId = (): string => {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
 
-  void (async () => {
-    const supplementary = await fetchGeminiCliCodeAssist(authIndex, projectId, t);
-    if (geminiCliSupplementaryRequestIds.get(fileName) !== requestId) {
-      return;
-    }
-
-    geminiCliSupplementaryCache.set(fileName, { requestId, ...supplementary });
-
-    useQuotaStore.getState().setGeminiCliQuota((prev) => {
-      const current = prev[fileName];
-      if (!current || current.status !== 'success') {
-        return prev;
-      }
-
-      if (
-        current.tierLabel === supplementary.tierLabel &&
-        current.tierId === supplementary.tierId &&
-        current.creditBalance === supplementary.creditBalance
-      ) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        [fileName]: {
-          ...current,
-          tierLabel: supplementary.tierLabel,
-          tierId: supplementary.tierId,
-          creditBalance: supplementary.creditBalance,
-        },
-      };
-    });
-  })();
-
-  return requestId;
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const value = Math.floor(Math.random() * 16);
+    const segment = char === 'x' ? value : (value & 0x3) | 0x8;
+    return segment.toString(16);
+  });
 };
 
-const fetchGeminiCliQuota = async (
+const consumeCodexRateLimitResetCredit = async (
   file: AuthFileItem,
   t: TFunction
-): Promise<{
-  fileName: string;
-  supplementaryRequestId: number;
-  buckets: GeminiCliQuotaBucketState[];
-  tierLabel: string | null;
-  tierId: string | null;
-  creditBalance: number | null;
-}> => {
+): Promise<void> => {
   const rawAuthIndex = file['auth_index'] ?? file.authIndex;
   const authIndex = normalizeAuthIndex(rawAuthIndex);
   if (!authIndex) {
-    throw new Error(t('gemini_cli_quota.missing_auth_index'));
+    throw new Error(t('codex_quota.missing_auth_index'));
   }
 
-  const projectId = resolveGeminiCliProjectId(file);
-  if (!projectId) {
-    throw new Error(t('gemini_cli_quota.missing_project_id'));
-  }
+  const requestHeader = buildCodexRequestHeader(file);
 
-  const quotaResponse = await apiCallApi.request({
+  const result = await apiCallApi.request({
     authIndex,
     method: 'POST',
-    url: GEMINI_CLI_QUOTA_URL,
-    header: { ...GEMINI_CLI_REQUEST_HEADERS },
-    data: JSON.stringify({ project: projectId }),
+    url: CODEX_RATE_LIMIT_RESET_CREDITS_CONSUME_URL,
+    header: requestHeader,
+    data: JSON.stringify({
+      redeem_request_id: createCodexRedeemRequestId(),
+    }),
   });
-  if (quotaResponse.statusCode < 200 || quotaResponse.statusCode >= 300) {
-    throw createStatusError(getApiCallErrorMessage(quotaResponse), quotaResponse.statusCode);
+
+  if (result.statusCode < 200 || result.statusCode >= 300) {
+    throw createStatusError(getApiCallErrorMessage(result), result.statusCode);
   }
+};
 
-  const payload = parseGeminiCliQuotaPayload(quotaResponse.body ?? quotaResponse.bodyText);
-  const buckets = Array.isArray(payload?.buckets) ? payload?.buckets : [];
+const resetCodexQuota = async (file: AuthFileItem, t: TFunction): Promise<CodexQuotaData> => {
+  await consumeCodexRateLimitResetCredit(file, t);
+  return fetchCodexQuota(file, t);
+};
 
-  const parsedBuckets = buckets
-    .map((bucket) => {
-      const modelId = normalizeGeminiCliModelId(bucket.modelId ?? bucket.model_id);
-      if (!modelId) return null;
-      const tokenType = normalizeStringValue(bucket.tokenType ?? bucket.token_type);
-      const remainingFractionRaw = normalizeQuotaFraction(
-        bucket.remainingFraction ?? bucket.remaining_fraction
-      );
-      const remainingAmount = normalizeNumberValue(
-        bucket.remainingAmount ?? bucket.remaining_amount
-      );
-      const resetTime = normalizeStringValue(bucket.resetTime ?? bucket.reset_time) ?? undefined;
-      let fallbackFraction: number | null = null;
-      if (remainingAmount !== null) {
-        fallbackFraction = remainingAmount <= 0 ? 0 : null;
-      } else if (resetTime) {
-        fallbackFraction = 0;
-      }
-      const remainingFraction = remainingFractionRaw ?? fallbackFraction;
-      return {
-        modelId,
-        tokenType,
-        remainingFraction,
-        remainingAmount,
-        resetTime,
-      };
-    })
-    .filter((bucket): bucket is GeminiCliParsedBucket => bucket !== null);
+const formatAntigravityDuration = (t: TFunction, deltaMs: number): string => {
+  const totalMinutes = Math.max(1, Math.ceil(deltaMs / 60000));
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
 
-  const builtBuckets = buildGeminiCliQuotaBuckets(parsedBuckets);
-  const supplementaryRequestId = scheduleGeminiCliSupplementaryRefresh(
-    file.name,
-    authIndex,
-    projectId,
-    t
+  if (days > 0) {
+    return t('antigravity_quota.duration_day_hour', {
+      days,
+      hours,
+    });
+  }
+  if (hours > 0) {
+    return t('antigravity_quota.duration_hour_minute', {
+      hours,
+      minutes,
+    });
+  }
+  if (minutes > 0) {
+    return t('antigravity_quota.duration_minute', {
+      minutes,
+    });
+  }
+  return t('antigravity_quota.duration_less_than_minute');
+};
+
+const formatAntigravityResetLabel = (
+  resetTime: string | undefined,
+  t: TFunction,
+  nowMs: number
+): string => {
+  if (!resetTime) return '-';
+  const resetMs = new Date(resetTime).getTime();
+  if (Number.isNaN(resetMs)) return '-';
+  const deltaMs = resetMs - nowMs;
+  if (deltaMs <= 0) return t('antigravity_quota.refresh_available');
+  return t('antigravity_quota.refreshes_in', {
+    duration: formatAntigravityDuration(t, deltaMs),
+  });
+};
+
+const ANTIGRAVITY_GROUP_LABEL_KEYS = new Map<string, string>([
+  ['gemini models', 'group_gemini_models'],
+  ['claude and gpt models', 'group_claude_gpt_models'],
+]);
+
+const ANTIGRAVITY_BUCKET_LABEL_KEYS = new Map<string, string>([
+  ['weekly limit', 'weekly_limit'],
+  ['daily limit', 'daily_limit'],
+  ['5 hour limit', 'five_hour_limit'],
+  ['5-hour limit', 'five_hour_limit'],
+  ['five hour limit', 'five_hour_limit'],
+  ['monthly limit', 'monthly_limit'],
+]);
+
+const normalizeAntigravityQuotaText = (value: string): string =>
+  value.trim().toLowerCase().replace(/\s+/g, ' ');
+
+const translateAntigravityQuotaLabel = (
+  value: string,
+  keys: Map<string, string>,
+  t: TFunction
+): string => {
+  const key = keys.get(normalizeAntigravityQuotaText(value));
+  return key ? t(`antigravity_quota.${key}`) : value;
+};
+
+const translateAntigravityQuotaDescription = (
+  value: string | undefined,
+  t: TFunction
+): string | undefined => {
+  if (!value) return undefined;
+  const modelsMatch = value.match(/^models within this group:\s*(.+)$/i);
+  if (modelsMatch) {
+    return t('antigravity_quota.group_models_description', {
+      models: modelsMatch[1].trim(),
+    });
+  }
+  return value;
+};
+
+const getAntigravityPlanLabel = (
+  subscription: AntigravityQuotaSubscription | null | undefined,
+  t: TFunction
+): string | null => {
+  if (!subscription) return null;
+  if (subscription.plan === 'free') return t('antigravity_subscription.plan_free');
+  if (subscription.plan === 'pro') return t('antigravity_subscription.plan_pro');
+  if (subscription.plan === 'ultra') return t('antigravity_subscription.plan_ultra');
+  if (subscription.plan === 'ultra-lite') return t('antigravity_subscription.plan_ultra_lite');
+  return (
+    subscription.tierName ||
+    subscription.tierId ||
+    (subscription.plan === 'unknown' ? t('antigravity_subscription.plan_unknown') : null)
   );
-  const supplementarySnapshot = readGeminiCliSupplementarySnapshot(
-    file.name,
-    supplementaryRequestId
-  );
-
-  return {
-    fileName: file.name,
-    supplementaryRequestId,
-    buckets: builtBuckets,
-    tierLabel: supplementarySnapshot.tierLabel,
-    tierId: supplementarySnapshot.tierId,
-    creditBalance: supplementarySnapshot.creditBalance,
-  };
 };
 
 const renderAntigravityItems = (
@@ -1126,42 +783,110 @@ const renderAntigravityItems = (
   helpers: QuotaRenderHelpers
 ): ReactNode => {
   const { styles: styleMap, QuotaProgressBar } = helpers;
-  const { createElement: h } = React;
+  const { createElement: h, Fragment } = React;
   const groups = quota.groups ?? [];
+  const nodes: ReactNode[] = [];
+  const planLabel = getAntigravityPlanLabel(quota.subscription, t);
+  const normalizedPlan = quota.subscription?.plan?.toLowerCase() ?? '';
+  const isPremiumPlan = normalizedPlan === 'ultra' || normalizedPlan === 'ultra-lite';
 
-  if (groups.length === 0) {
-    return h('div', { className: styleMap.quotaMessage }, t('antigravity_quota.empty_models'));
-  }
-
-  return groups.map((group) => {
-    const clamped = Math.max(0, Math.min(1, group.remainingFraction));
-    const percent = Math.round(clamped * 100);
-    const resetLabel = formatQuotaResetTime(group.resetTime);
-
-    return h(
-      'div',
-      { key: group.id, className: styleMap.quotaRow },
+  if (planLabel) {
+    nodes.push(
       h(
         'div',
-        { className: styleMap.quotaRowHeader },
-        h('span', { className: styleMap.quotaModel, title: group.models.join(', ') }, group.label),
+        { key: 'plan', className: styleMap.codexPlan },
+        h(
+          'span',
+          { className: styleMap.codexPlanItem },
+          h('span', { className: styleMap.codexPlanLabel }, t('antigravity_quota.plan_label')),
+          h(
+            'span',
+            { className: isPremiumPlan ? styleMap.premiumPlanValue : styleMap.codexPlanValue },
+            planLabel
+          )
+        )
+      )
+    );
+  }
+
+  if (groups.length === 0) {
+    nodes.push(
+      h(
+        'div',
+        { key: 'empty', className: styleMap.quotaMessage },
+        t('antigravity_quota.empty_models')
+      )
+    );
+    return h(Fragment, null, ...nodes);
+  }
+
+  const nowMs = Date.now() + (quota.serverTimeOffsetMs ?? 0);
+
+  nodes.push(
+    ...groups.map((group) => {
+      const groupLabel = translateAntigravityQuotaLabel(
+        group.label,
+        ANTIGRAVITY_GROUP_LABEL_KEYS,
+        t
+      );
+      const groupDescription = translateAntigravityQuotaDescription(group.description, t);
+
+      return h(
+        'div',
+        { key: group.id, className: styleMap.antigravityQuotaGroup },
         h(
           'div',
-          { className: styleMap.quotaMeta },
-          h('span', { className: styleMap.quotaPercent }, `${percent}%`),
-          h('span', { className: styleMap.quotaReset }, resetLabel)
-        )
-      ),
-      h(QuotaProgressBar, {
-        percent,
-        highThreshold: QUOTA_PROGRESS_HIGH_THRESHOLD,
-        mediumThreshold: QUOTA_PROGRESS_MEDIUM_THRESHOLD,
-      })
-    );
-  });
+          { className: styleMap.antigravityQuotaGroupHeader },
+          h('span', { className: styleMap.antigravityQuotaGroupTitle }, groupLabel),
+          groupDescription
+            ? h('span', { className: styleMap.antigravityQuotaGroupDescription }, groupDescription)
+            : null
+        ),
+        ...group.buckets.map((bucket) => {
+          const clamped = Math.max(0, Math.min(1, bucket.remainingFraction));
+          const percent = clamped * 100;
+          const percentLabel =
+            bucket.remainingFraction === 1
+              ? t('antigravity_quota.quota_available')
+              : t('antigravity_quota.remaining_percent', {
+                  percent: Math.round(percent),
+                });
+          const resetLabel = formatAntigravityResetLabel(bucket.resetTime, t, nowMs);
+          const bucketLabel = translateAntigravityQuotaLabel(
+            bucket.label,
+            ANTIGRAVITY_BUCKET_LABEL_KEYS,
+            t
+          );
+          const bucketDescription = translateAntigravityQuotaDescription(bucket.description, t);
+
+          return h(
+            'div',
+            { key: bucket.id, className: styleMap.quotaRow },
+            h(
+              'div',
+              { className: styleMap.quotaRowHeader },
+              h('span', { className: styleMap.quotaModel, title: bucketDescription }, bucketLabel),
+              h(
+                'div',
+                { className: styleMap.quotaMeta },
+                h('span', { className: styleMap.quotaPercent }, percentLabel),
+                h('span', { className: styleMap.quotaReset }, resetLabel)
+              )
+            ),
+            h(QuotaProgressBar, {
+              percent,
+              highThreshold: QUOTA_PROGRESS_HIGH_THRESHOLD,
+              mediumThreshold: QUOTA_PROGRESS_MEDIUM_THRESHOLD,
+            })
+          );
+        })
+      );
+    })
+  );
+
+  return h(Fragment, null, ...nodes);
 };
 
-const PREMIUM_GEMINI_CLI_TIER_IDS = new Set(['g1-ultra-tier']);
 const PREMIUM_CODEX_PLAN_TYPES = new Set(['pro', 'prolite', 'pro-lite', 'pro_lite']);
 
 const renderCodexItems = (
@@ -1173,6 +898,10 @@ const renderCodexItems = (
   const { createElement: h, Fragment } = React;
   const windows = quota.windows ?? [];
   const planType = quota.planType ?? null;
+  const subscriptionActiveUntil = quota.subscriptionActiveUntil ?? null;
+  const rateLimitResetCreditsAvailableCount = quota.rateLimitResetCreditsAvailableCount ?? null;
+  const rateLimitResetCredits = quota.rateLimitResetCredits ?? [];
+  const rateLimitResetCreditsError = quota.rateLimitResetCreditsError ?? '';
 
   const getPlanLabel = (pt?: string | null): string | null => {
     const normalized = normalizePlanType(pt);
@@ -1189,16 +918,87 @@ const renderCodexItems = (
 
   const planLabel = getPlanLabel(planType);
   const isPremiumPlan = PREMIUM_CODEX_PLAN_TYPES.has(normalizePlanType(planType) ?? '');
+  const expiryLabel = subscriptionActiveUntil ? formatDateTimeValue(subscriptionActiveUntil) : '';
   const nodes: ReactNode[] = [];
 
-  if (planLabel) {
-    const valueClass = isPremiumPlan ? styleMap.premiumPlanValue : styleMap.codexPlanValue;
+  if (planLabel || expiryLabel || rateLimitResetCreditsAvailableCount !== null) {
+    const planValueClass = isPremiumPlan ? styleMap.premiumPlanValue : styleMap.codexPlanValue;
+    const planNodes: ReactNode[] = [];
+
+    const appendPlanItem = (
+      key: string,
+      label: string,
+      value: string,
+      valueClassName = styleMap.codexPlanValue
+    ) => {
+      planNodes.push(
+        h(
+          'span',
+          { key, className: styleMap.codexPlanItem },
+          h('span', { className: styleMap.codexPlanLabel }, label),
+          h('span', { className: valueClassName }, value)
+        )
+      );
+    };
+
+    if (planLabel) {
+      appendPlanItem('plan-type', t('codex_quota.plan_label'), planLabel, planValueClass);
+    }
+
+    if (expiryLabel) {
+      appendPlanItem('subscription-expiry', t('codex_quota.expires_label'), expiryLabel);
+    }
+
+    if (rateLimitResetCreditsAvailableCount !== null) {
+      appendPlanItem(
+        'reset-credits',
+        t('codex_quota.reset_credits_label'),
+        rateLimitResetCreditsAvailableCount.toString()
+      );
+    }
+
+    nodes.push(h('div', { key: 'plan', className: styleMap.codexPlan }, ...planNodes));
+  }
+
+  if (rateLimitResetCredits.length > 0) {
     nodes.push(
       h(
         'div',
-        { key: 'plan', className: styleMap.codexPlan },
-        h('span', { className: styleMap.codexPlanLabel }, t('codex_quota.plan_label')),
-        h('span', { className: valueClass }, planLabel)
+        { key: 'reset-credit-expiries', className: styleMap.codexResetCredits },
+        h(
+          'div',
+          { className: styleMap.codexResetCreditsTitle },
+          t('codex_quota.reset_credits_expiry_label')
+        ),
+        ...rateLimitResetCredits.map((credit, index) =>
+          h(
+            'div',
+            {
+              key: credit.id || `${credit.expiresAt}-${index}`,
+              className: styleMap.codexResetCreditRow,
+            },
+            h(
+              'span',
+              { className: styleMap.codexResetCreditLabel },
+              t('codex_quota.reset_credit_number', { index: index + 1 })
+            ),
+            h(
+              'span',
+              { className: styleMap.codexResetCreditTime },
+              formatShanghaiDateTime(credit.expiresAt) || credit.expiresAt
+            )
+          )
+        )
+      )
+    );
+  } else if (rateLimitResetCreditsError) {
+    nodes.push(
+      h(
+        'div',
+        { key: 'reset-credit-expiry-error', className: styleMap.codexResetCreditsError },
+        t('codex_quota.reset_credits_expiry_failed', {
+          message: rateLimitResetCreditsError,
+        })
       )
     );
   }
@@ -1236,101 +1036,6 @@ const renderCodexItems = (
         ),
         h(QuotaProgressBar, {
           percent: remaining,
-          highThreshold: QUOTA_PROGRESS_HIGH_THRESHOLD,
-          mediumThreshold: QUOTA_PROGRESS_MEDIUM_THRESHOLD,
-        })
-      );
-    })
-  );
-
-  return h(Fragment, null, ...nodes);
-};
-
-const renderGeminiCliItems = (
-  quota: GeminiCliQuotaState,
-  t: TFunction,
-  helpers: QuotaRenderHelpers
-): ReactNode => {
-  const { styles: styleMap, QuotaProgressBar } = helpers;
-  const { createElement: h, Fragment } = React;
-  const buckets = quota.buckets ?? [];
-  const tierLabel = quota.tierLabel ?? null;
-  const tierId = quota.tierId ?? null;
-  const creditBalance = quota.creditBalance ?? null;
-  const isPremiumTier = tierId !== null && PREMIUM_GEMINI_CLI_TIER_IDS.has(tierId);
-  const nodes: ReactNode[] = [];
-
-  if (tierLabel) {
-    const valueClass = isPremiumTier ? styleMap.premiumPlanValue : styleMap.codexPlanValue;
-    nodes.push(
-      h(
-        'div',
-        { key: 'tier', className: styleMap.codexPlan },
-        h('span', { className: styleMap.codexPlanLabel }, t('gemini_cli_quota.tier_label')),
-        h('span', { className: valueClass }, tierLabel)
-      )
-    );
-  }
-
-  if (creditBalance !== null) {
-    nodes.push(
-      h(
-        'div',
-        { key: 'credits', className: styleMap.codexPlan },
-        h('span', { className: styleMap.codexPlanLabel }, t('gemini_cli_quota.credit_label')),
-        h(
-          'span',
-          { className: styleMap.codexPlanValue },
-          t('gemini_cli_quota.credit_amount', { count: creditBalance })
-        )
-      )
-    );
-  }
-
-  if (buckets.length === 0) {
-    nodes.push(
-      h('div', { key: 'empty', className: styleMap.quotaMessage }, t('gemini_cli_quota.empty_buckets'))
-    );
-    return h(Fragment, null, ...nodes);
-  }
-
-  nodes.push(
-    ...buckets.map((bucket) => {
-      const fraction = bucket.remainingFraction;
-      const clamped = fraction === null ? null : Math.max(0, Math.min(1, fraction));
-      const percent = clamped === null ? null : Math.round(clamped * 100);
-      const percentLabel = percent === null ? '--' : `${percent}%`;
-      const remainingAmountLabel =
-        bucket.remainingAmount === null || bucket.remainingAmount === undefined
-          ? null
-          : t('gemini_cli_quota.remaining_amount', {
-              count: bucket.remainingAmount,
-            });
-      const titleBase =
-        bucket.modelIds && bucket.modelIds.length > 0 ? bucket.modelIds.join(', ') : bucket.label;
-      const title = bucket.tokenType ? `${titleBase} (${bucket.tokenType})` : titleBase;
-
-      const resetLabel = formatQuotaResetTime(bucket.resetTime);
-
-      return h(
-        'div',
-        { key: bucket.id, className: styleMap.quotaRow },
-        h(
-          'div',
-          { className: styleMap.quotaRowHeader },
-          h('span', { className: styleMap.quotaModel, title }, bucket.label),
-          h(
-            'div',
-            { className: styleMap.quotaMeta },
-            h('span', { className: styleMap.quotaPercent }, percentLabel),
-            remainingAmountLabel
-              ? h('span', { className: styleMap.quotaAmount }, remainingAmountLabel)
-              : null,
-            h('span', { className: styleMap.quotaReset }, resetLabel)
-          )
-        ),
-        h(QuotaProgressBar, {
-          percent,
           highThreshold: QUOTA_PROGRESS_HIGH_THRESHOLD,
           mediumThreshold: QUOTA_PROGRESS_MEDIUM_THRESHOLD,
         })
@@ -1403,8 +1108,12 @@ const resolveClaudePlanType = (profile: ClaudeProfileResponse | null): string | 
   const hasClaudePro = normalizeFlagValue(profile.account?.has_claude_pro);
   if (hasClaudePro) return 'plan_pro';
 
-  const organizationType = normalizeStringValue(profile.organization?.organization_type)?.toLowerCase();
-  const subscriptionStatus = normalizeStringValue(profile.organization?.subscription_status)?.toLowerCase();
+  const organizationType = normalizeStringValue(
+    profile.organization?.organization_type
+  )?.toLowerCase();
+  const subscriptionStatus = normalizeStringValue(
+    profile.organization?.subscription_status
+  )?.toLowerCase();
 
   if (organizationType === 'claude_team' && subscriptionStatus === 'active') {
     return 'plan_team';
@@ -1418,7 +1127,11 @@ const resolveClaudePlanType = (profile: ClaudeProfileResponse | null): string | 
 const fetchClaudeQuota = async (
   file: AuthFileItem,
   t: TFunction
-): Promise<{ windows: ClaudeQuotaWindow[]; extraUsage?: ClaudeExtraUsage | null; planType?: string | null }> => {
+): Promise<{
+  windows: ClaudeQuotaWindow[];
+  extraUsage?: ClaudeExtraUsage | null;
+  planType?: string | null;
+}> => {
   const rawAuthIndex = file['auth_index'] ?? file.authIndex;
   const authIndex = normalizeAuthIndex(rawAuthIndex);
   if (!authIndex) {
@@ -1568,7 +1281,6 @@ export const CLAUDE_CONFIG: QuotaConfig<
     error: message,
     errorStatus: status,
   }),
-  buildDataFromCachePayload: (payload, t) => parseClaudeDataFromCachePayload(payload, t),
   cardClassName: styles.claudeCard,
   controlsClassName: styles.claudeControls,
   controlClassName: styles.claudeControl,
@@ -1576,7 +1288,7 @@ export const CLAUDE_CONFIG: QuotaConfig<
   renderQuotaItems: renderClaudeItems,
 };
 
-export const ANTIGRAVITY_CONFIG: QuotaConfig<AntigravityQuotaState, AntigravityQuotaGroup[]> = {
+export const ANTIGRAVITY_CONFIG: QuotaConfig<AntigravityQuotaState, AntigravityQuotaData> = {
   type: 'antigravity',
   i18nPrefix: 'antigravity_quota',
   cardIdleMessageKey: 'quota_management.card_idle_hint',
@@ -1584,15 +1296,26 @@ export const ANTIGRAVITY_CONFIG: QuotaConfig<AntigravityQuotaState, AntigravityQ
   fetchQuota: fetchAntigravityQuota,
   storeSelector: (state) => state.antigravityQuota,
   storeSetter: 'setAntigravityQuota',
-  buildLoadingState: () => ({ status: 'loading', groups: [] }),
-  buildSuccessState: (groups) => ({ status: 'success', groups }),
+  buildLoadingState: () => ({
+    status: 'loading',
+    groups: [],
+    subscription: null,
+    serverTimeOffsetMs: null,
+  }),
+  buildSuccessState: (data) => ({
+    status: 'success',
+    groups: data.groups,
+    subscription: data.subscription,
+    serverTimeOffsetMs: data.serverTimeOffsetMs,
+  }),
   buildErrorState: (message, status) => ({
     status: 'error',
     groups: [],
+    subscription: null,
+    serverTimeOffsetMs: null,
     error: message,
     errorStatus: status,
   }),
-  buildDataFromCachePayload: (payload) => parseAntigravityGroupsFromCachePayload(payload),
   cardClassName: styles.antigravityCard,
   controlsClassName: styles.antigravityControls,
   controlClassName: styles.antigravityControl,
@@ -1600,30 +1323,39 @@ export const ANTIGRAVITY_CONFIG: QuotaConfig<AntigravityQuotaState, AntigravityQ
   renderQuotaItems: renderAntigravityItems,
 };
 
-export const CODEX_CONFIG: QuotaConfig<
-  CodexQuotaState,
-  { planType: string | null; windows: CodexQuotaWindow[] }
-> = {
+export const CODEX_CONFIG: QuotaConfig<CodexQuotaState, CodexQuotaData> = {
   type: 'codex',
   i18nPrefix: 'codex_quota',
   cardIdleMessageKey: 'quota_management.card_idle_hint',
   filterFn: (file) => isCodexFile(file) && !isDisabledAuthFile(file),
   fetchQuota: fetchCodexQuota,
+  resetQuota: resetCodexQuota,
+  canResetQuota: (quota) => (quota.rateLimitResetCreditsAvailableCount ?? 0) > 0,
   storeSelector: (state) => state.codexQuota,
   storeSetter: 'setCodexQuota',
-  buildLoadingState: () => ({ status: 'loading', windows: [] }),
+  buildLoadingState: () => ({
+    status: 'loading',
+    windows: [],
+    rateLimitResetCredits: [],
+    rateLimitResetCreditsError: '',
+  }),
   buildSuccessState: (data) => ({
     status: 'success',
     windows: data.windows,
     planType: data.planType,
+    subscriptionActiveUntil: data.subscriptionActiveUntil,
+    rateLimitResetCreditsAvailableCount: data.rateLimitResetCreditsAvailableCount,
+    rateLimitResetCredits: data.rateLimitResetCredits,
+    rateLimitResetCreditsError: data.rateLimitResetCreditsError,
   }),
   buildErrorState: (message, status) => ({
     status: 'error',
     windows: [],
+    rateLimitResetCredits: [],
+    rateLimitResetCreditsError: '',
     error: message,
     errorStatus: status,
   }),
-  buildDataFromCachePayload: (payload, t) => parseCodexDataFromCachePayload(payload, t),
   cardClassName: styles.codexCard,
   controlsClassName: styles.codexControls,
   controlClassName: styles.codexControl,
@@ -1631,58 +1363,7 @@ export const CODEX_CONFIG: QuotaConfig<
   renderQuotaItems: renderCodexItems,
 };
 
-export const GEMINI_CLI_CONFIG: QuotaConfig<
-  GeminiCliQuotaState,
-  {
-    fileName: string;
-    supplementaryRequestId: number;
-    buckets: GeminiCliQuotaBucketState[];
-    tierLabel: string | null;
-    tierId: string | null;
-    creditBalance: number | null;
-  }
-> = {
-  type: 'gemini-cli',
-  i18nPrefix: 'gemini_cli_quota',
-  cardIdleMessageKey: 'quota_management.card_idle_hint',
-  filterFn: (file) =>
-    isGeminiCliFile(file) && !isRuntimeOnlyAuthFile(file) && !isDisabledAuthFile(file),
-  fetchQuota: fetchGeminiCliQuota,
-  storeSelector: (state) => state.geminiCliQuota,
-  storeSetter: 'setGeminiCliQuota',
-  buildLoadingState: () => ({ status: 'loading', buckets: [], tierLabel: null, tierId: null, creditBalance: null }),
-  buildSuccessState: (data) => {
-    const supplementarySnapshot = readGeminiCliSupplementarySnapshot(
-      data.fileName,
-      data.supplementaryRequestId
-    );
-
-    return {
-      status: 'success',
-      buckets: data.buckets,
-      tierLabel: supplementarySnapshot.tierLabel ?? data.tierLabel,
-      tierId: supplementarySnapshot.tierId ?? data.tierId,
-      creditBalance: supplementarySnapshot.creditBalance ?? data.creditBalance,
-    };
-  },
-  buildErrorState: (message, status) => ({
-    status: 'error',
-    buckets: [],
-    error: message,
-    errorStatus: status,
-  }),
-  buildDataFromCachePayload: (payload) => parseGeminiCliDataFromCachePayload(payload),
-  cardClassName: styles.geminiCliCard,
-  controlsClassName: styles.geminiCliControls,
-  controlClassName: styles.geminiCliControl,
-  gridClassName: styles.geminiCliGrid,
-  renderQuotaItems: renderGeminiCliItems,
-};
-
-const fetchKimiQuota = async (
-  file: AuthFileItem,
-  t: TFunction
-): Promise<KimiQuotaRow[]> => {
+const fetchKimiQuota = async (file: AuthFileItem, t: TFunction): Promise<KimiQuotaRow[]> => {
   const rawAuthIndex = file['auth_index'] ?? file.authIndex;
   const authIndex = normalizeAuthIndex(rawAuthIndex);
   if (!authIndex) {
@@ -1733,7 +1414,7 @@ const renderKimiItems = (
     const percentLabel = remaining === null ? '--' : `${remaining}%`;
     const rowLabel = row.labelKey
       ? t(row.labelKey, (row.labelParams ?? {}) as Record<string, string | number>)
-      : row.label ?? '';
+      : (row.label ?? '');
     const resetLabel = formatKimiResetHint(t, row.resetHint);
 
     return h(
@@ -1747,12 +1428,8 @@ const renderKimiItems = (
           'div',
           { className: styleMap.quotaMeta },
           h('span', { className: styleMap.quotaPercent }, percentLabel),
-          limit > 0
-            ? h('span', { className: styleMap.quotaAmount }, `${used} / ${limit}`)
-            : null,
-          resetLabel
-            ? h('span', { className: styleMap.quotaReset }, resetLabel)
-            : null
+          limit > 0 ? h('span', { className: styleMap.quotaAmount }, `${used} / ${limit}`) : null,
+          resetLabel ? h('span', { className: styleMap.quotaReset }, resetLabel) : null
         )
       ),
       h(QuotaProgressBar, {
@@ -1762,6 +1439,183 @@ const renderKimiItems = (
       })
     );
   });
+};
+
+const normalizeXaiCentValue = (value: XaiBillingConfig['monthlyLimit']): number | null => {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return normalizeNumberValue((value as { val?: unknown }).val);
+  }
+  return normalizeNumberValue(value);
+};
+
+const buildXaiBillingSummary = (
+  config: XaiBillingConfig | null | undefined
+): XaiBillingSummary | null => {
+  if (!config || typeof config !== 'object') return null;
+
+  const monthlyLimitCents = normalizeXaiCentValue(config.monthlyLimit ?? config.monthly_limit);
+  const usedCents = normalizeXaiCentValue(config.used);
+  const onDemandCapCents = normalizeXaiCentValue(config.onDemandCap ?? config.on_demand_cap);
+  const billingPeriodStart =
+    normalizeStringValue(config.billingPeriodStart ?? config.billing_period_start) ?? undefined;
+  const billingPeriodEnd =
+    normalizeStringValue(config.billingPeriodEnd ?? config.billing_period_end) ?? undefined;
+
+  if (
+    monthlyLimitCents === null &&
+    usedCents === null &&
+    onDemandCapCents === null &&
+    !billingPeriodEnd
+  ) {
+    return null;
+  }
+
+  const usedPercent =
+    monthlyLimitCents !== null && monthlyLimitCents > 0 && usedCents !== null
+      ? (usedCents / monthlyLimitCents) * 100
+      : null;
+
+  return {
+    monthlyLimitCents,
+    usedCents,
+    onDemandCapCents,
+    billingPeriodStart,
+    billingPeriodEnd,
+    usedPercent,
+  };
+};
+
+const fetchXaiQuota = async (file: AuthFileItem, t: TFunction): Promise<XaiBillingSummary> => {
+  const rawAuthIndex = file['auth_index'] ?? file.authIndex;
+  const authIndex = normalizeAuthIndex(rawAuthIndex);
+  if (!authIndex) {
+    throw new Error(t('xai_quota.missing_auth_index'));
+  }
+
+  const result = await apiCallApi.request({
+    authIndex,
+    method: 'GET',
+    url: XAI_BILLING_URL,
+    header: { ...XAI_REQUEST_HEADERS },
+  });
+
+  if (result.statusCode < 200 || result.statusCode >= 300) {
+    throw createStatusError(getApiCallErrorMessage(result), result.statusCode);
+  }
+
+  const payload = parseXaiBillingPayload(result.body ?? result.bodyText);
+  const summary = buildXaiBillingSummary(payload?.config);
+  if (!summary) {
+    throw new Error(t('xai_quota.empty_data'));
+  }
+
+  return summary;
+};
+
+const formatUsdFromCents = (cents: number | null): string => {
+  if (cents === null) return '--';
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+  }).format(cents / 100);
+};
+
+const formatXaiRemainingAmount = (billing: XaiBillingSummary): string => {
+  const remainingCents =
+    billing.monthlyLimitCents !== null && billing.usedCents !== null
+      ? Math.max(0, billing.monthlyLimitCents - billing.usedCents)
+      : null;
+  const remaining = formatUsdFromCents(remainingCents);
+  const limit = formatUsdFromCents(billing.monthlyLimitCents);
+  if (billing.monthlyLimitCents === null) return remaining;
+  return `${remaining} / ${limit}`;
+};
+
+const XAI_SUPERGROK_LIMIT_CENTS = 15_000;
+const XAI_SUPERGROK_HEAVY_LIMIT_CENTS = 150_000;
+
+const resolveXaiPlan = (
+  monthlyLimitCents: number | null
+): { labelKey: string; premium: boolean } | null => {
+  if (monthlyLimitCents === XAI_SUPERGROK_LIMIT_CENTS) {
+    return { labelKey: 'plan_supergrok', premium: false };
+  }
+  if (monthlyLimitCents === XAI_SUPERGROK_HEAVY_LIMIT_CENTS) {
+    return { labelKey: 'plan_supergrok_heavy', premium: true };
+  }
+  return null;
+};
+
+const renderXaiItems = (
+  quota: XaiQuotaState,
+  t: TFunction,
+  helpers: QuotaRenderHelpers
+): ReactNode => {
+  const { styles: styleMap, QuotaProgressBar } = helpers;
+  const { createElement: h, Fragment } = React;
+  const billing = quota.billing;
+
+  if (!billing) {
+    return h('div', { className: styleMap.quotaMessage }, t('xai_quota.empty_data'));
+  }
+
+  const clampedUsed =
+    billing.usedPercent === null ? null : Math.max(0, Math.min(100, billing.usedPercent));
+  const remaining = clampedUsed === null ? null : Math.max(0, Math.min(100, 100 - clampedUsed));
+  const percentLabel = remaining === null ? '--' : `${Math.round(remaining)}%`;
+  const amountLabel = formatXaiRemainingAmount(billing);
+  const resetLabel = formatQuotaResetTime(billing.billingPeriodEnd);
+  const onDemandCap = billing.onDemandCapCents ?? 0;
+  const plan = resolveXaiPlan(billing.monthlyLimitCents);
+  const payAsYouGoLabel =
+    onDemandCap > 0
+      ? t('xai_quota.pay_as_you_go_enabled', { cap: formatUsdFromCents(onDemandCap) })
+      : t('xai_quota.pay_as_you_go_disabled');
+
+  return h(
+    Fragment,
+    null,
+    plan
+      ? h(
+          'div',
+          { key: 'plan', className: styleMap.codexPlan },
+          h('span', { className: styleMap.codexPlanLabel }, t('xai_quota.plan_label')),
+          h(
+            'span',
+            { className: plan.premium ? styleMap.premiumPlanValue : styleMap.codexPlanValue },
+            t(`xai_quota.${plan.labelKey}`)
+          )
+        )
+      : null,
+    h(
+      'div',
+      { key: 'pay-as-you-go', className: styleMap.codexPlan },
+      h('span', { className: styleMap.codexPlanLabel }, t('xai_quota.pay_as_you_go_label')),
+      h('span', { className: styleMap.codexPlanValue }, payAsYouGoLabel)
+    ),
+    h(
+      'div',
+      { key: 'monthly-credits', className: styleMap.quotaRow },
+      h(
+        'div',
+        { className: styleMap.quotaRowHeader },
+        h('span', { className: styleMap.quotaModel }, t('xai_quota.monthly_credits')),
+        h(
+          'div',
+          { className: styleMap.quotaMeta },
+          h('span', { className: styleMap.quotaPercent }, percentLabel),
+          h('span', { className: styleMap.quotaAmount }, amountLabel),
+          h('span', { className: styleMap.quotaReset }, resetLabel)
+        )
+      ),
+      h(QuotaProgressBar, {
+        percent: remaining,
+        highThreshold: QUOTA_PROGRESS_HIGH_THRESHOLD,
+        mediumThreshold: QUOTA_PROGRESS_MEDIUM_THRESHOLD,
+      })
+    )
+  );
 };
 
 export const KIMI_CONFIG: QuotaConfig<KimiQuotaState, KimiQuotaRow[]> = {
@@ -1780,10 +1634,32 @@ export const KIMI_CONFIG: QuotaConfig<KimiQuotaState, KimiQuotaRow[]> = {
     error: message,
     errorStatus: status,
   }),
-  buildDataFromCachePayload: (payload) => parseKimiRowsFromCachePayload(payload),
   cardClassName: styles.kimiCard,
   controlsClassName: styles.kimiControls,
   controlClassName: styles.kimiControl,
   gridClassName: styles.kimiGrid,
   renderQuotaItems: renderKimiItems,
+};
+
+export const XAI_CONFIG: QuotaConfig<XaiQuotaState, XaiBillingSummary> = {
+  type: 'xai',
+  i18nPrefix: 'xai_quota',
+  cardIdleMessageKey: 'quota_management.card_idle_hint',
+  filterFn: (file) => isXaiFile(file) && !isDisabledAuthFile(file),
+  fetchQuota: fetchXaiQuota,
+  storeSelector: (state) => state.xaiQuota,
+  storeSetter: 'setXaiQuota',
+  buildLoadingState: () => ({ status: 'loading', billing: null }),
+  buildSuccessState: (billing) => ({ status: 'success', billing }),
+  buildErrorState: (message, status) => ({
+    status: 'error',
+    billing: null,
+    error: message,
+    errorStatus: status,
+  }),
+  cardClassName: styles.xaiCard,
+  controlsClassName: styles.xaiControls,
+  controlClassName: styles.xaiControl,
+  gridClassName: styles.xaiGrid,
+  renderQuotaItems: renderXaiItems,
 };

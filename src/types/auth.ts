@@ -18,17 +18,13 @@ export interface AuthState {
   rememberPassword: boolean;
   serverVersion: string | null;
   serverBuildDate: string | null;
-  /**
-   * 后端是否支持 /plugins 接口（v7 引入）。
-   * 通过连接成功后探测一次 GET /plugins 来判定，用于：
-   *  - 侧边栏是否显示 "插件"/"插件商店" 入口
-   *  - 路由层是否注册 /plugins、/plugin-store、/plugin-pages/*
-   */
+  serverRuntimeKind: ServerRuntimeKind;
   supportsPlugin: boolean;
 }
 
 // 连接状态
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
+export type ServerRuntimeKind = 'unknown' | 'cpa' | 'home';
 
 export interface ConnectionInfo {
   status: ConnectionStatus;
