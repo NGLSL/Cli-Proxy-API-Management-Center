@@ -1,4 +1,4 @@
-@use '../../../../styles/mixins' as *;
+﻿@use '../../../../styles/mixins' as *;
 @use '../../../../styles/variables' as *;
 
 .form {
@@ -62,26 +62,12 @@
     line-height: 1.45;
   }
 
-  .sponsorGroupTitle {
-    gap: 3px;
-
-    strong {
-      font-size: 14px;
-      font-weight: 650;
-      line-height: 1.4;
-    }
-  }
-
-  .sponsorUrlOptionText,
   .checkboxText {
     font-size: 14px;
     line-height: 1.45;
   }
 
-  .sponsorUrlOptionText small,
   .checkboxText small,
-  .sponsorProtocolUrl,
-  .sponsorUsageResult,
   .connectivityError,
   .discoveryEmpty,
   .discoveryItem,
@@ -91,17 +77,6 @@
     line-height: 1.6;
   }
 
-  .sponsorProtocolName {
-    font-size: 13px;
-    font-weight: 650;
-    line-height: 1.4;
-  }
-
-  .sponsorUsageMain {
-    line-height: 1.45;
-  }
-
-  .sponsorUsageMeta,
   .discoveryAlias,
   .discoveryCount,
   .discoveryAddedTag {
@@ -360,51 +335,6 @@
   }
 }
 
-.sponsorGroupTitle {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-
-  strong {
-    color: var(--text-primary);
-    font-size: 13px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-}
-
-.sponsorGroupSummary {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 8px;
-}
-
-.sponsorSummaryKey,
-.sponsorSummaryUrl {
-  display: inline-block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sponsorSummaryKey {
-  max-width: 140px;
-  font-family: $font-mono;
-  color: var(--text-primary);
-}
-
-.sponsorSummaryUrl {
-  max-width: min(360px, 45vw);
-  font-family: $font-mono;
-  color: var(--muted-foreground);
-}
-
 .entryCardHeaderRight {
   display: flex;
   align-items: center;
@@ -464,141 +394,6 @@
 
 .entriesToolbarSplit {
   justify-content: space-between;
-}
-
-.sponsorUrlOptions {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-
-  @media (min-width: 560px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.sponsorUrlOption {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--bg-secondary);
-  cursor: pointer;
-  transition:
-    border-color $transition-fast,
-    background-color $transition-fast;
-
-  input {
-    margin: 2px 0 0;
-    accent-color: var(--primary-color);
-    flex-shrink: 0;
-
-    &:disabled {
-      cursor: not-allowed;
-    }
-  }
-
-  &:hover {
-    border-color: var(--primary-color);
-  }
-}
-
-.sponsorUrlOptionActive {
-  border-color: var(--primary-color);
-  background: var(--primary-10);
-}
-
-.sponsorUrlOptionText {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 13px;
-  color: var(--text-primary);
-
-  small {
-    font-family: $font-mono;
-    font-size: 11px;
-    line-height: 1.4;
-    color: var(--muted-foreground);
-    overflow-wrap: anywhere;
-  }
-}
-
-.sponsorProtocolGrid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-
-  @media (min-width: 560px) {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-.sponsorProtocolCard {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--bg-secondary);
-}
-
-.sponsorProtocolName {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.sponsorProtocolUrl {
-  font-family: $font-mono;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--muted-foreground);
-  overflow-wrap: anywhere;
-}
-
-.sponsorUsageSection {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.sponsorUsageResult {
-  width: 100%;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--success-color) 34%, var(--border-color));
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--success-color) 8%, var(--bg-primary));
-  color: var(--text-primary);
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.sponsorUsageResultWarning {
-  color: var(--warning-text);
-  border-color: var(--warning-border);
-  background: var(--warning-bg);
-}
-
-.sponsorUsageMain {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 500;
-}
-
-.sponsorUsageMeta {
-  color: var(--muted-foreground);
 }
 
 .connectivityRow {
@@ -940,6 +735,83 @@
     input:first-child {
       grid-column: 1 / -1;
     }
+  }
+}
+
+.modelEntry {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.modelEntryActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.modelEntryDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.entrySummary {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.entrySummaryKey {
+  display: inline-block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: $font-mono;
+  color: var(--text-primary);
+}
+
+.entryBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.showMoreBtn {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+
+  &:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
   }
 }
 
