@@ -101,10 +101,7 @@
     "check_connection": "Check Connection"
   },
   "connection": {
-    "status": "Connection Status:",
-    "title": "Connection Information",
-    "server_address": "Server Address:",
-    "management_key": "Management Key:"
+    "status": "Connection Status:"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -180,30 +177,7 @@
     "request_log_warning": "Keep this off unless you need detailed troubleshooting.",
     "ws_auth_enable": "Require auth for /ws/*",
     "routing_strategy_round_robin": "round-robin (cycle)",
-    "routing_strategy_fill_first": "fill-first (prioritize)",
-    "title": "Basic Settings",
-    "debug_title": "Debug Mode",
-    "proxy_title": "Proxy Settings",
-    "proxy_url_placeholder": "e.g.: socks5://user:pass@127.0.0.1:1080/",
-    "proxy_update": "Update",
-    "proxy_clear": "Clear",
-    "retry_title": "Request Retry",
-    "retry_update": "Update",
-    "quota_title": "Quota Exceeded Behavior",
-    "quota_switch_project": "Auto Switch Project",
-    "quota_switch_preview": "Switch to Preview Model",
-    "logging_title": "Logging",
-    "logs_max_total_size_title": "Log Size Limit",
-    "logs_max_total_size_label": "Total log size cap (MB):",
-    "logs_max_total_size_hint": "Set to 0 to disable the limit.",
-    "logs_max_total_size_update": "Update",
-    "force_model_prefix_enable": "Force model prefix",
-    "ws_auth_title": "WebSocket Authentication",
-    "routing_title": "Routing Strategy",
-    "routing_strategy_label": "Routing strategy:",
-    "routing_strategy_hint": "round-robin cycles through keys; fill-first prioritizes the first available key; sticky-round-robin keeps a sticky cycle per access identity.",
-    "routing_strategy_update": "Update",
-    "routing_strategy_sticky_round_robin": "sticky-round-robin (sticky cycle)"
+    "routing_strategy_fill_first": "fill-first (prioritize)"
   },
   "auth_files": {
     "title": "Auth Files Management",
@@ -405,14 +379,7 @@
     "plan_free": "Free",
     "plan_pro": "Pro",
     "plan_ultra": "Ultra",
-    "plan_ultra_lite": "Ultra Lite",
-    "subscription_label": "Subscription",
-    "plan_badge": "Plan {{plan}}",
-    "loading_short": "Plan...",
-    "error_badge": "Plan error",
-    "load_failed": "Subscription check failed: {{message}}",
-    "missing_auth_index": "Auth file missing auth_index",
-    "empty_data": "No subscription data available"
+    "plan_ultra_lite": "Ultra Lite"
   },
   "antigravity_quota": {
     "title": "Antigravity Quota",
@@ -609,18 +576,7 @@
     "provider_required": "Please enter a provider first",
     "upgrade_required": "Current CPA version does not support OAuth model disablement. Please upgrade.",
     "upgrade_required_title": "Please upgrade CLI Proxy API",
-    "upgrade_required_desc": "The current server version does not support fetching OAuth model disablement. Please upgrade to the latest CPA (CLI Proxy API) version and try again.",
-    "refresh": "Refresh",
-    "refreshing": "Refreshing...",
-    "provider_auto": "Follow current filter",
-    "saving": "Saving...",
-    "delete_title": "Delete exclusion",
-    "deleting": "Deleting...",
-    "list_empty_filtered": "No disabled items in this scope; click “Add Disablement” to add.",
-    "disconnected": "Connect to the server to view model disablement",
-    "load_failed": "Failed to load model disablement",
-    "scope_all": "Scope: All providers",
-    "scope_provider": "Scope: {{provider}}"
+    "upgrade_required_desc": "The current server version does not support fetching OAuth model disablement. Please upgrade to the latest CPA (CLI Proxy API) version and try again."
   },
   "oauth_model_alias": {
     "title": "OAuth Model Aliases",
@@ -861,16 +817,7 @@
     "search_empty_desc": "Try a different keyword or clear the filters.",
     "double_click_copy_hint": "Double-click to copy raw log line",
     "copy_success": "Log copied to clipboard",
-    "copy_failed": "Copy failed",
-    "clear_confirm_title": "Clear Logs",
-    "error_log_button": "Select Error Log",
-    "trace_usage_load_error": "Failed to load request usage details",
-    "auto_refresh_enabled": "Auto refresh enabled",
-    "auto_refresh_disabled": "Auto refresh disabled",
-    "lines": "lines",
-    "removed": "Filtered",
-    "upgrade_required_title": "Please Upgrade CLI Proxy API",
-    "upgrade_required_desc": "The current server version does not support the logs viewing feature. Please upgrade to the latest version of CLI Proxy API to use this feature."
+    "copy_failed": "Copy failed"
   },
   "config_management": {
     "title": "Config Panel",
@@ -1215,23 +1162,8 @@
   },
   "quota_management": {
     "title": "Quota Management",
-    "description": "Monitor cached quota status and remaining availability for all supported credentials.",
-    "refresh_all_credentials": "Refresh all credentials",
-    "refresh_files": "Refresh auth files",
-    "refresh_files_and_quota": "Refresh files & quota",
-    "refresh_current_page_credentials": "Refresh current page",
-    "refresh_selection_success": "Refreshed quota cache for {{count}} credentials.",
-    "refresh_selection_failed": "Failed to refresh quota cache: {{message}}",
-    "cache_status_label": "Cache",
-    "cache_status_fresh": "Fresh",
-    "cache_status_refreshing": "Refreshing",
-    "cache_status_rate_limited": "Rate limited",
-    "cache_status_unauthorized": "Unauthorized",
-    "cache_status_error": "Error",
-    "cache_status_pending": "Pending",
-    "last_refresh": "Last refresh",
-    "quota_recover_at": "Recover at",
-    "card_idle_hint": "Use the top \"Refresh files & quota\" button to fetch the latest quota data."
+    "description": "Monitor OAuth quota status for Antigravity, Codex, Claude, Kimi, and xAI credentials.",
+    "refresh_all_credentials": "Refresh all credentials"
   },
   "plugin_management": {
     "title": "Plugin Management",
@@ -1337,8 +1269,8 @@
     "install_confirm_title": "Install plugin",
     "install_confirm_message": "Download {{target}} from the plugin registry and install it into the local plugin directory?",
     "update_confirm_title": "Update plugin",
-    "update_confirm_message": "Download and install the latest version of {{target}}?",
-    "install_version_label": "Version override (optional)",
+    "update_confirm_message": "Download and install {{target}}?",
+    "install_version_label": "Version",
     "install_version_latest": "latest",
     "install_version_latest_mode": "Latest stable",
     "install_version_latest_hint": "Resolved by the backend during install. Current listed version: {{version}}.",
@@ -1460,59 +1392,7 @@
     "login_failed": "Login failed",
     "commercial_mode_restart_required": "Commercial mode setting changed. Please restart the service for it to take effect",
     "copy_failed": "Copy failed",
-    "link_copied": "Link copied to clipboard",
-    "load_failed": "Load failed",
-    "save_failed": "Save failed",
-    "debug_updated": "Debug settings updated",
-    "proxy_updated": "Proxy settings updated",
-    "proxy_cleared": "Proxy settings cleared",
-    "retry_updated": "Retry settings updated",
-    "quota_switch_project_updated": "Project switch settings updated",
-    "quota_switch_preview_updated": "Preview model switch settings updated",
-    "logging_to_file_updated": "Logging settings updated",
-    "logs_max_total_size_updated": "Log size limit updated",
-    "force_model_prefix_updated": "Model prefix setting updated",
-    "ws_auth_updated": "WebSocket authentication setting updated",
-    "routing_strategy_updated": "Routing strategy updated",
-    "api_key_added": "API key added successfully",
-    "api_key_updated": "API key updated successfully",
-    "api_key_deleted": "API key deleted successfully",
-    "api_key_invalid_chars": "API key can only contain letters, numbers, and symbols",
-    "gemini_key_added": "Gemini key added successfully",
-    "gemini_key_updated": "Gemini key updated successfully",
-    "gemini_key_deleted": "Gemini key deleted successfully",
-    "gemini_multi_input_required": "Please enter at least one Gemini key",
-    "gemini_multi_failed": "Gemini bulk add failed",
-    "gemini_multi_summary": "Gemini bulk add finished: {{success}} added, {{skipped}} skipped, {{failed}} failed",
-    "codex_config_added": "Codex configuration added successfully",
-    "codex_config_updated": "Codex configuration updated successfully",
-    "codex_config_deleted": "Codex configuration deleted successfully",
-    "codex_base_url_required": "Please enter the Codex Base URL",
-    "codex_key_required": "Please add at least one Codex API key",
-    "claude_config_added": "Claude configuration added successfully",
-    "claude_config_updated": "Claude configuration updated successfully",
-    "claude_config_deleted": "Claude configuration deleted successfully",
-    "vertex_config_added": "Vertex configuration added successfully",
-    "vertex_config_updated": "Vertex configuration updated successfully",
-    "vertex_config_deleted": "Vertex configuration deleted successfully",
-    "config_enabled": "Configuration enabled",
-    "config_disabled": "Configuration disabled",
-    "field_required": "Required fields cannot be empty",
-    "openai_provider_required": "Please fill in provider name and Base URL",
-    "openai_provider_added": "OpenAI provider added successfully",
-    "openai_provider_updated": "OpenAI provider updated successfully",
-    "openai_provider_deleted": "OpenAI provider deleted successfully",
-    "openai_model_name_required": "Model name is required",
-    "openai_test_url_required": "Please provide a valid Base URL before testing",
-    "openai_test_key_required": "Please add at least one API key before testing",
-    "openai_test_model_required": "Please select a model to test",
-    "please_enter": "Please enter",
-    "please_fill": "Please fill",
-    "provider_name_url": "provider name and Base URL",
-    "api_key": "API key",
-    "gemini_api_key": "Gemini API key",
-    "codex_api_key": "Codex API key",
-    "claude_api_key": "Claude API key"
+    "link_copied": "Link copied to clipboard"
   },
   "language": {
     "switch": "Language",
@@ -1526,9 +1406,7 @@
     "light": "Wool Paper",
     "white": "Pure White",
     "dark": "Dark",
-    "auto": "Follow system",
-    "switch_to_light": "Switch to wool paper mode",
-    "switch_to_dark": "Switch to dark mode"
+    "auto": "Follow system"
   },
   "sidebar": {
     "toggle_expand": "Expand sidebar",
@@ -1539,16 +1417,14 @@
   "footer": {
     "api_version": "CLI Proxy API Version",
     "build_date": "Build Time",
-    "version": "Management UI Version",
-    "author": "Author"
+    "version": "Management UI Version"
   },
   "providersPage": {
     "header": {
       "title": "AI Providers",
       "activeResources": "{{active}}/{{total}} active resources",
       "providerFamilies": "{{count}} provider families",
-      "updatedAt": "Updated {{time}}",
-      "issueCount": "{{count}} issues"
+      "updatedAt": "Updated {{time}}"
     },
     "actions": {
       "refresh": "Refresh",
@@ -1592,8 +1468,7 @@
       "cloakTag": "Cloak",
       "empty": "No resources yet, click \"New\" to add.",
       "filterPlaceholder": "Search keys, URLs, prefixes…",
-      "description": "Manage resources under {{route}}",
-      "providerIssue": "This provider has an issue"
+      "description": "Manage resources under {{route}}"
     },
     "status": {
       "active": "Active",

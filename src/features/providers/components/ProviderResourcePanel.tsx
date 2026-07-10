@@ -1,7 +1,10 @@
 import { useTranslation } from 'react-i18next';
-import { IconPlus, IconSearch } from '@/components/ui/icons';
+import { IconExternalLink, IconPlus, IconSearch } from '@/components/ui/icons';
 import type { ProviderRecentUsageMap } from '@/components/providers/utils';
 import { PROVIDER_LOGOS } from '../brandLogos';
+import { CLAUDE_API_AFFILIATE_URL } from '../claudeApi';
+import { APIKEY_FUN_AFFILIATE_URL, APIKEY_FUN_DASHBOARD_URL } from '../sponsor';
+import { getSponsorProviderDefinition } from '../sponsorDefinitions';
 import type { ProviderGroup, ProviderResource } from '../types';
 import { ProviderResourceTable } from './ProviderResourceTable';
 import { ProviderResourceToolbar } from './ProviderResourceToolbar';
@@ -52,7 +55,19 @@ export function ProviderResourcePanel({
   const { t } = useTranslation();
   const logo = PROVIDER_LOGOS[group.id];
   const providerTitle = t(`providersPage.providerNames.${group.id}`);
-  const emptyText = t('providersPage.table.empty');
+  const hasProviderInfo = group.resources.length > 0;
+  const showSponsorRegistrationLink = group.id === 'apikeyFun' && !hasProviderInfo;
+  const showSponsorDashboardLink = group.id === 'apikeyFun' && hasProviderInfo;
+  const showClaudeApiSponsorLink = group.id === 'claudeApi';
+  const registrationUrl =
+    group.id === 'claudeApi'
+      ? CLAUDE_API_AFFILIATE_URL
+      : group.id === 'code0' || group.id === 'fennoAI' || group.id === 'qiniuCloud'
+        ? getSponsorProviderDefinition(group.id).affiliateUrl
+        : null;
+  const emptyText = showSponsorRegistrationLink
+    ? t('providersPage.sponsor.emptyRegisterHint')
+    : t('providersPage.table.empty');
   const logoClassName = [
     styles.logo,
     logo?.darkSrc ? styles.logoThemeLight : '',
@@ -73,6 +88,9 @@ export function ProviderResourcePanel({
         </>
       ) : null}
       <h2 className={styles.title}>{providerTitle}</h2>
+      {showSponsorDashboardLink ? (
+        <IconExternalLink className={styles.titleExternalIcon} size={16} />
+      ) : null}
     </>
   );
 
@@ -81,7 +99,44 @@ export function ProviderResourcePanel({
       <div className={styles.header}>
         <div className={styles.headerMain}>
           <div className={styles.titleArea}>
-            <div className={styles.titleRow}>{titleContent}</div>
+            {showSponsorDashboardLink ? (
+              <a
+                className={`${styles.titleRow} ${styles.titleLink}`}
+                href={APIKEY_FUN_DASHBOARD_URL}
+                target="_blank"
+                rel="noreferrer"
+                title={t('providersPage.sponsor.dashboardLink')}
+              >
+                {titleContent}
+              </a>
+            ) : (
+              <div className={styles.titleRow}>{titleContent}</div>
+            )}
+            {showSponsorDashboardLink ? (
+              <a
+                className={styles.sponsorLink}
+                href={APIKEY_FUN_DASHBOARD_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span className={styles.sponsorLinkText}>
+                  {t('providersPage.sponsor.dashboardLink')}
+                </span>
+                <IconExternalLink className={styles.sponsorLinkIcon} size={14} />
+              </a>
+            ) : showClaudeApiSponsorLink || registrationUrl ? (
+              <a
+                className={`${styles.sponsorLink} ${styles.sponsorLinkEmphasis}`}
+                href={registrationUrl ?? CLAUDE_API_AFFILIATE_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span className={styles.sponsorLinkText}>
+                  {t('providersPage.sponsor.registerLink')}
+                </span>
+                <IconExternalLink className={styles.sponsorLinkIcon} size={14} />
+              </a>
+            ) : null}
           </div>
           <div className={styles.searchWrap}>
             <span className={styles.searchIcon} aria-hidden="true">
@@ -116,10 +171,22 @@ export function ProviderResourcePanel({
         <div className={styles.empty}>
           <div>{emptyText}</div>
           <div className={styles.emptyAction}>
-            <button type="button" className={styles.emptyActionButton} onClick={onCreate}>
-              <IconPlus size={16} />
-              <span>{t('providersPage.actions.new')}</span>
-            </button>
+            {showSponsorRegistrationLink ? (
+              <a
+                className={`${styles.emptyActionButton} ${styles.emptyActionButtonEmphasis}`}
+                href={APIKEY_FUN_AFFILIATE_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <IconExternalLink size={16} />
+                <span>{t('providersPage.sponsor.registerLink')}</span>
+              </a>
+            ) : (
+              <button type="button" className={styles.emptyActionButton} onClick={onCreate}>
+                <IconPlus size={16} />
+                <span>{t('providersPage.actions.new')}</span>
+              </button>
+            )}
           </div>
         </div>
       ) : (

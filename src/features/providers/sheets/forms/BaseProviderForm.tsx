@@ -28,6 +28,7 @@ import { ConnectivityStatusIcon } from './ConnectivityStatusIcon';
 import { ApiKeyEntriesEditor } from './ApiKeyEntriesEditor';
 import { ModelEntriesEditor } from './ModelEntriesEditor';
 import styles from './sharedForm.module.scss';
+import { CLAUDE_API_BASE_URL } from '../../claudeApi';
 
 interface BaseProviderFormProps {
   brand: ProviderBrand;
@@ -55,7 +56,7 @@ const formatJsonObject = (value?: Record<string, unknown>): string => {
 };
 
 const isClaudeLikeBrand = (brand: ProviderBrand): boolean =>
-  brand === 'claude';
+  brand === 'claude' || brand === 'claudeApi';
 
 function buildInitialForm(
   brand: ProviderBrand,
@@ -66,7 +67,7 @@ function buildInitialForm(
     return {
       apiKey: '',
       name: '',
-      baseUrl: '',
+      baseUrl: brand === 'claudeApi' ? CLAUDE_API_BASE_URL : '',
       proxyUrl: '',
       prefix: '',
       disabled: false,
@@ -120,7 +121,7 @@ function buildInitialForm(
       testModel: cfg.testModel ?? '',
       apiKeyEntries: cfg.apiKeyEntries?.length
         ? cfg.apiKeyEntries.map((entry) => ({
-            apiKey: entry.apiKey ?? '',
+            apiKey: '',
             existingApiKey: entry.apiKey,
             proxyUrl: entry.proxyUrl ?? '',
             authIndex: entry.authIndex,
@@ -133,10 +134,11 @@ function buildInitialForm(
   const disabled = hasDisableAllModelsRule(cfg.excludedModels);
   const excludedList = stripDisableAllRule(cfg.excludedModels);
   return {
-    // 预填充实际 API key,使编辑时点击眼睛图标可见明文;
-    // 保存时若用户清空了此字段,buildProviderKeyConfig 会 fallback 到 existing.apiKey,
-    // 因此"留空=不变"的契约仍然成立。输入框已设 autoComplete/data-1p-ignore 等防自动填充。
-    apiKey: cfg.apiKey ?? '',
+    // Keep the API key blank in edit mode. Pre-filling the real key makes this
+    // password field a browser-autofill target (the saved management key can
+    // overwrite it) and defeats the "leave empty = keep unchanged" contract; an
+    // empty field is preserved on save via buildProviderKeyConfig's existing fallback.
+    apiKey: '',
     name: '',
     baseUrl: cfg.baseUrl ?? '',
     proxyUrl: cfg.proxyUrl ?? '',
