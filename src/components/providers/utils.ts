@@ -66,13 +66,15 @@ export const buildOpenAIChatCompletionsEndpoint = (baseUrl: string): string => {
 export const buildCodexResponsesEndpoint = (baseUrl: string): string => {
   const trimmed = normalizeUpstreamBaseUrl(baseUrl);
   if (!trimmed) return '';
-  if (/\/v1\/responses$/i.test(trimmed)) {
+  // Codex 兼容供应商可能把 Responses API 暴露在 /v3 下。
+  // 已明确携带 v1/v3 版本的地址必须沿用该版本，不能再拼成 /v3/v1/responses。
+  if (/\/v(?:1|3)\/responses$/i.test(trimmed)) {
     return trimmed;
   }
-  if (/\/v1\/models$/i.test(trimmed)) {
+  if (/\/v(?:1|3)\/models$/i.test(trimmed)) {
     return trimmed.replace(/\/models$/i, '/responses');
   }
-  if (/\/v1$/i.test(trimmed)) {
+  if (/\/v(?:1|3)$/i.test(trimmed)) {
     return `${trimmed}/responses`;
   }
   return `${trimmed}/v1/responses`;

@@ -38,8 +38,10 @@ const buildV1ModelsEndpoint = (baseUrl: string): string => {
   const normalized = normalizeApiBase(baseUrl);
   if (!normalized) return '';
   const trimmed = normalized.replace(/\/+$/g, '');
-  if (/\/v1\/models$/i.test(trimmed)) return trimmed;
-  if (/\/v1$/i.test(trimmed)) return `${trimmed}/models`;
+  // Codex 的部分兼容供应商使用 /v3。若调用方已经给出 v3 版本前缀，
+  // 模型发现必须继续请求 /v3/models，不能降回或追加成 /v3/v1/models。
+  if (/\/v(?:1|3)\/models$/i.test(trimmed)) return trimmed;
+  if (/\/v(?:1|3)$/i.test(trimmed)) return `${trimmed}/models`;
   return `${trimmed}/v1/models`;
 };
 
