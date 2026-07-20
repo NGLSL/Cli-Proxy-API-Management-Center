@@ -3,7 +3,8 @@ import type { SponsorProviderRaw } from './types';
 
 export const CODE0_PROVIDER_NAME = 'code0';
 export const CODE0_DISPLAY_NAME = 'Code0';
-export const CODE0_AFFILIATE_URL = 'https://code0.ai/agent/register/slxVMR3uVBoRgNBf';
+// CPA 不在管理页面或构建产物中分发供应商返利注册链接。
+export const CODE0_AFFILIATE_URL = '';
 export const CODE0_BASE_URL = 'https://code0.ai';
 export const CODE0_OPENAI_BASE_URL = `${CODE0_BASE_URL}/v1`;
 export const CODE0_CODEX_BASE_URL = CODE0_OPENAI_BASE_URL;

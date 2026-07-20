@@ -3,8 +3,9 @@ import type { SponsorProviderRaw } from './types';
 
 export const APIKEY_FUN_PROVIDER_NAME = 'apikeyFun';
 export const APIKEY_FUN_DISPLAY_NAME = 'APIKEY.FUN';
-export const APIKEY_FUN_AFFILIATE_URL = 'https://apikey.fun/register?aff=AKCPA';
-export const APIKEY_FUN_DASHBOARD_URL = 'https://apikey.fun/dashboard';
+// CPA 不携带上游商业推广或返利链接；保留空值仅用于兼容尚未完全拆除的内部类型定义。
+export const APIKEY_FUN_AFFILIATE_URL = '';
+export const APIKEY_FUN_DASHBOARD_URL = '';
 export const APIKEY_FUN_STANDARD_BASE_URL = 'https://api.apikey.fun';
 export const APIKEY_FUN_DIRECT_BASE_URL = 'https://slb.apikey.fun';
 export const APIKEY_FUN_OPENAI_BASE_URL = `${APIKEY_FUN_STANDARD_BASE_URL}/v1`;

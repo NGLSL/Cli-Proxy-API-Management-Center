@@ -121,7 +121,9 @@ function buildInitialForm(
       testModel: cfg.testModel ?? '',
       apiKeyEntries: cfg.apiKeyEntries?.length
         ? cfg.apiKeyEntries.map((entry) => ({
-            apiKey: '',
+            // 编辑时预填真实密钥，用户点击眼睛按钮后才能看到当前配置值。
+            // existingApiKey 继续保留，用户主动清空输入框时仍可按“留空即不修改”处理。
+            apiKey: entry.apiKey ?? '',
             existingApiKey: entry.apiKey,
             proxyUrl: entry.proxyUrl ?? '',
             authIndex: entry.authIndex,
@@ -134,11 +136,10 @@ function buildInitialForm(
   const disabled = hasDisableAllModelsRule(cfg.excludedModels);
   const excludedList = stripDisableAllRule(cfg.excludedModels);
   return {
-    // Keep the API key blank in edit mode. Pre-filling the real key makes this
-    // password field a browser-autofill target (the saved management key can
-    // overwrite it) and defeats the "leave empty = keep unchanged" contract; an
-    // empty field is preserved on save via buildProviderKeyConfig's existing fallback.
-    apiKey: '',
+    // 编辑已有提供商时必须预填真实密钥，这样密码框默认遮挡，但点击眼睛按钮后可以查看明文。
+    // 输入框已设置 autoComplete 和密码管理器忽略标记；若用户主动清空，保存转换仍会回退到
+    // existing.apiKey，因此同时保留 CPA 原有的“留空即不修改”约定。
+    apiKey: cfg.apiKey ?? '',
     name: '',
     baseUrl: cfg.baseUrl ?? '',
     proxyUrl: cfg.proxyUrl ?? '',

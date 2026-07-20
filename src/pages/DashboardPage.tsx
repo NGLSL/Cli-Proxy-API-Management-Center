@@ -6,7 +6,6 @@ import {
   IconBot,
   IconFileText,
   IconSatellite,
-  IconSidebarQuickStart,
 } from '@/components/ui/icons';
 import { useAuthStore, useConfigStore, useModelsStore } from '@/stores';
 import { authFilesApi } from '@/services/api';
@@ -163,13 +162,6 @@ export function DashboardPage() {
       path: '/system',
       loading: modelsLoading,
       sublabel: t('dashboard.available_models_desc'),
-    },
-    {
-      label: t('dashboard.quick_start_card'),
-      value: t('dashboard.quick_start_entry'),
-      icon: <IconSidebarQuickStart size={24} />,
-      path: '/quick-start',
-      sublabel: t('dashboard.quick_start_entry_desc'),
     },
   ];
 

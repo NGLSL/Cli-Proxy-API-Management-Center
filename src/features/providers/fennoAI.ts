@@ -3,7 +3,8 @@ import type { SponsorProviderRaw } from './types';
 
 export const FENNO_AI_PROVIDER_NAME = 'fennoAI';
 export const FENNO_AI_DISPLAY_NAME = 'FennoAI';
-export const FENNO_AI_AFFILIATE_URL = 'https://api.fenno.ai/register?aff=DQFAMNB6CBLY';
+// CPA 不在管理页面或构建产物中分发供应商返利注册链接。
+export const FENNO_AI_AFFILIATE_URL = '';
 export const FENNO_AI_BASE_URL = 'https://api.fenno.ai';
 export const FENNO_AI_CODEX_BASE_URL = `${FENNO_AI_BASE_URL}/v1`;
 export const FENNO_AI_ANTHROPIC_BASE_URL = FENNO_AI_BASE_URL;

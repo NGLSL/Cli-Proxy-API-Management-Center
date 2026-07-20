@@ -3,7 +3,8 @@ import type { SponsorProviderRaw } from './types';
 
 export const QINIU_CLOUD_PROVIDER_NAME = 'qiniuCloud';
 export const QINIU_CLOUD_DISPLAY_NAME = '七牛云';
-export const QINIU_CLOUD_AFFILIATE_URL = 'https://s.qiniu.com/miI73q';
+// CPA 不在管理页面或构建产物中分发供应商返利注册链接。
+export const QINIU_CLOUD_AFFILIATE_URL = '';
 export const QINIU_CLOUD_DOMESTIC_BASE_URL = 'https://api.qnaigc.com';
 export const QINIU_CLOUD_OVERSEAS_BASE_URL = 'https://api.modelink.ai';
 
