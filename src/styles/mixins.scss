@@ -17,6 +17,14 @@
   }
 }
 
+// 桌面端从平板断点后的第一个像素开始，避免与 tablet 的最大宽度产生重叠。
+// UsagePage 等页面通过这个混入把单列布局切换为双列布局，因此同步样式时不能遗漏。
+@mixin desktop {
+  @media (min-width: #{$breakpoint-tablet + 1}) {
+    @content;
+  }
+}
+
 // 文本截断
 @mixin text-ellipsis {
   overflow: hidden;

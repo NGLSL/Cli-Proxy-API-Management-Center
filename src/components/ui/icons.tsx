@@ -350,6 +350,34 @@ export function IconSatellite({ size = 20, ...props }: IconProps) {
   );
 }
 
+// 用量统计卡片使用的三个图标曾在同步上游时被误删，但对应页面仍保留引用。
+// 继续使用内联 SVG，保证管理页面构建出的单文件 HTML 不依赖外部图标资源。
+export function IconDiamond({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...baseSvgProps} width={size} height={size} {...props}>
+      <path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z" />
+    </svg>
+  );
+}
+
+export function IconTrendingUp({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...baseSvgProps} width={size} height={size} {...props}>
+      <path d="M16 7h6v6" />
+      <path d="m22 7-8.5 8.5-5-5L2 17" />
+    </svg>
+  );
+}
+
+export function IconChartLine({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...baseSvgProps} width={size} height={size} {...props}>
+      <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+      <path d="m19 9-5 5-4-4-3 3" />
+    </svg>
+  );
+}
+
 export function IconTimer({ size = 20, ...props }: IconProps) {
   return (
     <svg {...baseSvgProps} width={size} height={size} {...props}>
@@ -467,6 +495,26 @@ export function IconSidebarQuota({ size = 20, ...props }: IconProps) {
     <svg {...baseSvgProps} width={size} height={size} {...props}>
       <path d="m12 14 4-4" />
       <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+    </svg>
+  );
+}
+
+// 用量页面的侧栏入口使用独立柱状图图标，避免与配额仪表盘图标混淆。
+export function IconSidebarUsage({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...baseSvgProps} width={size} height={size} {...props}>
+      <path d="M3.5 20h17" />
+      <rect x="5" y="13" width="3.5" height="7" rx="0.5" />
+      <rect
+        x="10.25"
+        y="7"
+        width="3.5"
+        height="13"
+        rx="0.5"
+        fill="currentColor"
+        fillOpacity="0.12"
+      />
+      <rect x="15.5" y="10" width="3.5" height="10" rx="0.5" />
     </svg>
   );
 }
